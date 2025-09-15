@@ -1,0 +1,5 @@
+embeddings {
+  tensor_name: "unique_id:00017"
+  metadata_path: "00017/unique_id/metadata.tsv"
+  tensor_path: "00017/unique_id/tensors.tsv"
+}
