@@ -82,7 +82,7 @@ def get_user_input() -> tuple[str, int]:
         except Exception:
             print("⚠️  Please enter a valid integer")
 
-    print("\n✅ Configuration:")
+    print("\nConfiguration:")
     print(f"   Training start: {train_start}")
     print(f"   Prediction days: {test_days}")
     # Detailed periods are printed in main() after actual row-based split

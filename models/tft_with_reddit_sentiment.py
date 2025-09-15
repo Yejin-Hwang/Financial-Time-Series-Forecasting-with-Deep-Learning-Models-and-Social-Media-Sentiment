@@ -346,7 +346,7 @@ def train_model(tft, train_dataloader, config):
     print("  - Model checkpointing enabled")
     
     # Train the model
-    print("\n🚀 Starting model training...")
+    print("\nStarting model training...")
     trainer.fit(tft, train_dataloaders=train_dataloader)
     print("✅ Training completed!")
     
@@ -732,7 +732,7 @@ def save_results_and_update_matrix(performance_metrics, config):
 
 def main():
     """Main function to run the entire TFT analysis pipeline"""
-    print("🚀 Starting Automated TFT Analysis with Reddit Sentiment & Spike Data...")
+    print("Starting Automated TFT Analysis with Reddit Sentiment & Spike Data...")
     
     # Set random seed for reproducibility
     import torch

@@ -509,7 +509,7 @@ def train_model(tft, train_dataloader, config):
     print("  - Model checkpointing enabled")
     
     # Train the model
-    print("\n🚀 Starting model training...")
+    print("\nStarting model training...")
     trainer.fit(
         tft,
         train_dataloaders=train_dataloader,

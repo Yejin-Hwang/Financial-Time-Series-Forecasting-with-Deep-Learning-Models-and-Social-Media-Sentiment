@@ -105,7 +105,7 @@ def get_user_input():
         except ValueError:
             print("⚠️  Please enter a valid number")
     
-    print(f"\n✅ Configuration:")
+    print(f"\nConfiguration:")
     print(f"   Training period: {train_start_dt.strftime('%Y-%m-%d')} to {train_end_dt.strftime('%Y-%m-%d')}")
     print(f"   Prediction days: {pred_days}")
     
@@ -233,7 +233,7 @@ def main():
                 print("  💡 Consider using ARIMA(p, 1, q) for better results")
     
     # 6. Fit ARIMA model
-    print(f"\n🔧 Fitting ARIMA{order} model...")
+    print(f"\nFitting ARIMA{order} model...")
     model = ARIMA(df_train['close'], order=order)
     fitted = model.fit()
     
