@@ -42,18 +42,18 @@ output_csv='data/interim/activitiy recognition/spike_data.csv', ticker='TSLA', s
 
 ## Top Results
 
-Best overall RMSE on TSLA (lower is better) from `results/result_matrix.csv`:
+Best overall RMSE on TSLA (lower is better), parsed from `results/result_matrix.csv`:
 
-```
-Model,MAE,MSE,RMSE
-ARIMA,30.08,1600.08,40.0010
-timesfm,7.56,104.85,10.2397
-chronos,10.89,303.91,17.4331
-TFT_reddit_N,9.84,130.77,11.4355
-TFT_Reddit_Y,5.99,40.72,6.3809  <- best RMSE
-```
+| Model                | MAE  | MSE    | RMSE  |
+|----------------------|------:|-------:|------:|
+| ARIMA                | 30.08 | 1600.08| 40.00 |
+| timesfm              |  7.56 |  104.85| 10.24 |
+| chronos              | 10.89 |  303.91| 17.43 |
+| TFT_reddit_N         |  9.84 |  130.77| 11.44 |
+| **TFT_Reddit_Y**     | **5.99** | **40.72** | **6.38** |
 
-- **TFT with Reddit sentiment and spike features (TFT_Reddit_Y)** achieved the best RMSE ≈ 6.38 on the test horizon in our runs.
+- Winner: **TFT_Reddit_Y** (TFT + Reddit sentiment & spike features) with RMSE ≈ 6.38.
+- Metrics are computed on the forecast horizon produced by each notebook runner.
 
 ## Project structure
 
