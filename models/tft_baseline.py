@@ -805,7 +805,20 @@ def create_standalone_plot(predictions, actuals, config, df=None):
         plt.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.show()
+    
+    # Save to results directory with consistent naming
+    import os
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    results_dir = os.path.join(project_root, 'results')
+    os.makedirs(results_dir, exist_ok=True)
+    plot_path = os.path.join(results_dir, 'TSLA_TFT_baseline_forecast.png')
+    try:
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        print(f"Plot saved to {plot_path}")
+    except Exception as e:
+        print(f"⚠️ Failed to save plot: {e}")
+    finally:
+        plt.show()
     
     print("✓ Standalone plot created successfully!")
 
@@ -913,13 +926,10 @@ def save_results_and_update_matrix(performance_metrics, config):
     # Save updated matrix
     with open(os.path.join(results_dir, "TSLA_results_matrix.pkl"), "wb") as f:
         pickle.dump(matrix, f)
-    print(f"✓ Results matrix saved to {os.path.join(results_dir, 'TSLA_results_matrix.pkl')}")
-    
     # Also save as CSV for easy viewing
     matrix.to_csv(os.path.join(results_dir, "result_matrix.csv"), index=True)
-    print(f"✓ Results matrix also saved as {os.path.join(results_dir, 'result_matrix.csv')}")
     
-    print("\n🎉 TFT Analysis Complete!")
+    print("\nTFT analysis complete.")
     print(f"📊 Model trained on {config['training_days']} days of data")
     print(f"🔮 Predictions made for {config['prediction_days']} days ahead")
     print(f"📈 Best RMSE: {performance_metrics['rmse']:.4f}")

@@ -257,6 +257,17 @@ def _plot_results(df_train: pd.DataFrame, df_test: pd.DataFrame, forecast_df: pd
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
+
+    # Save plot under results/
+    results_dir = Path(__file__).resolve().parent.parent / "results"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    plot_path = results_dir / f"{ticker}_TimesFM_forecast.png"
+    try:
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        print(f"Plot saved to {plot_path}")
+    except Exception as e:
+        print(f"Failed to save plot: {e}")
+
     plt.show()
 
 
@@ -298,19 +309,41 @@ def _save_results_matrix(ticker: str, metrics: tuple[float, float, float] | None
     if metrics is None:
         return
     mae, mse, rmse = metrics
-    file_name = f"{ticker}_results_matrix.pkl"
+    # Ensure results dir exists
+    results_dir = Path(__file__).resolve().parent.parent / "results"
+    results_dir.mkdir(parents=True, exist_ok=True)
+
+    # Per-ticker pickle (for detailed runs)
+    pkl_path = results_dir / f"{ticker}_results_matrix.pkl"
     try:
-        with open(file_name, "rb") as f:
-            matrix = pickle.load(f)
-    except FileNotFoundError:
+        if pkl_path.exists():
+            with open(pkl_path, "rb") as f:
+                matrix = pickle.load(f)
+        else:
+            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE'])
+    except Exception:
         matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE'])
 
     matrix.loc['timesfm'] = [mae, mse, rmse]
-    with open(file_name, "wb") as f:
-        pickle.dump(matrix, f)
+    try:
+        with open(pkl_path, "wb") as f:
+            pickle.dump(matrix, f)
+    except Exception as e:
+        print(f"Failed to save per-ticker matrix: {e}")
 
-    print("Results saved to matrix successfully!")
-    print(matrix)
+    # Global CSV summary (shared across models)
+    csv_path = results_dir / "result_matrix.csv"
+    try:
+        if csv_path.exists():
+            global_matrix = pd.read_csv(csv_path, index_col=0)
+        else:
+            global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE'])
+        global_matrix.loc['timesfm'] = [mae, mse, rmse]
+        global_matrix.to_csv(csv_path)
+        print("Results saved to matrix successfully!")
+        print(global_matrix)
+    except Exception as e:
+        print(f"Failed to update global results matrix: {e}")
 
 
 def main(ticker: str = "TSLA", test_days: int = 5,

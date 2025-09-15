@@ -117,18 +117,55 @@ def load_and_prepare_data(file_path="tsla_price_sentiment_spike.csv", config=Non
         print(f"✓ Data loaded successfully from {file_path}")
         print(f"  - Shape: {df.shape}")
         
-        # Convert date column to datetime
-        df['date'] = pd.to_datetime(df['date'])
-        print(f"  - Date range: {df['date'].min().strftime('%m/%d/%y')} to {df['date'].max().strftime('%m/%d/%y')}")
+        # Convert date column to datetime and sort
+        df['date'] = pd.to_datetime(df['date'], errors='coerce', utc=True).dt.tz_localize(None)
+        df = df.sort_values('date').reset_index(drop=True)
+        print(f"  - Date range: {df['date'].min().strftime('%Y-%m-%d')} to {df['date'].max().strftime('%Y-%m-%d')}")
         
-        # Check for missing values
-        missing_values = df.isnull().sum().sum()
-        if missing_values == 0:
-            print("✓ No missing values found")
-        else:
-            print(f"⚠️ Warning: {missing_values} missing values found")
-            df = df.dropna()
-            print(f"  - Shape after removing missing values: {df.shape}")
+        # Ensure essential columns
+        if 'time_idx' not in df.columns:
+            df['time_idx'] = range(len(df))
+        if 'unique_id' not in df.columns:
+            df['unique_id'] = 'TSLA'
+
+        # Basic feature hygiene
+        df['volume'] = df.get('volume', 0).fillna(0)
+        df['close'] = df['close'].astype(float)
+
+        # Feature engineering to leverage sentiment/spike information without leakage
+        # Price returns and volatility (encoder-only)
+        df['return_1d'] = df['close'].pct_change()
+        df['rolling_volatility'] = df['return_1d'].rolling(window=14, min_periods=1).std()
+
+        # Sentiment lags and rolling stats (known at prediction time)
+        if 'daily_sentiment' in df.columns:
+            for i in range(1, 6):
+                df[f'daily_sentiment_lag{i}'] = df['daily_sentiment'].shift(i)
+            for w in (3, 7, 14):
+                df[f'daily_sentiment_mean_{w}'] = df['daily_sentiment'].shift(1).rolling(window=w, min_periods=1).mean()
+                df[f'daily_sentiment_std_{w}'] = df['daily_sentiment'].shift(1).rolling(window=w, min_periods=1).std()
+
+        # Spike aggregations (known at prediction time)
+        if 'spike_presence' in df.columns:
+            for w in (3, 7, 14):
+                df[f'spike_presence_sum_{w}'] = df['spike_presence'].shift(1).rolling(window=w, min_periods=1).sum()
+        if 'spike_intensity' in df.columns:
+            for w in (3, 7, 14):
+                df[f'spike_intensity_max_{w}'] = df['spike_intensity'].shift(1).rolling(window=w, min_periods=1).max()
+
+        # Calendar features if not present
+        df['month'] = df['date'].dt.month
+        df['day_of_week'] = df['date'].dt.dayofweek
+        df['quarter'] = df['date'].dt.quarter
+        df['year'] = df['date'].dt.year
+        df['is_month_end'] = df['date'].dt.is_month_end.astype(int)
+        df['is_month_start'] = df['date'].dt.is_month_start.astype(int)
+        # Placeholder for earnings proximity if not provided
+        if 'days_since_earning' not in df.columns:
+            df['days_since_earning'] = 0
+
+        # Fill any NaNs introduced by lag/rolling
+        df = df.fillna(method='ffill').fillna(method='bfill')
         
         # Display data info
         print("\nData columns:")
@@ -234,14 +271,21 @@ def create_tft_dataset(df, config):
     
     print(f"  - Training cutoff: time_idx {training_cutoff}")
     
-    # Define time-varying features (including sentiment and spike features)
+    # Define time-varying features (engineered sentiment/spike features as known; target/price as unknown)
     time_varying_known_reals = [
         "time_idx", "month", "day_of_week", "quarter", "year", 
-        "is_month_end", "is_month_start", "days_since_earning"
+        "is_month_end", "is_month_start", "days_since_earning",
+        # Sentiment lags and aggregates
+        "daily_sentiment_lag1", "daily_sentiment_lag2", "daily_sentiment_lag3", "daily_sentiment_lag4", "daily_sentiment_lag5",
+        "daily_sentiment_mean_3", "daily_sentiment_mean_7", "daily_sentiment_mean_14",
+        "daily_sentiment_std_7", "daily_sentiment_std_14",
+        # Spike aggregates
+        "spike_presence_sum_3", "spike_presence_sum_7", "spike_presence_sum_14",
+        "spike_intensity_max_3", "spike_intensity_max_7", "spike_intensity_max_14"
     ]
     
     time_varying_unknown_reals = [
-        "close", "volume", "daily_sentiment", "spike_presence", "spike_intensity"
+        "close", "volume", "rolling_volatility"
     ]
     
     # Filter out features that don't exist in the dataset
@@ -314,40 +358,44 @@ def create_model_and_dataloader(training_dataset, config):
 # 7. Train Model
 # =============================================================================
 
-def train_model(tft, train_dataloader, config):
+def train_model(tft, train_dataloader, training_dataset, config):
     """Train the TFT model with callbacks and monitoring"""
     import lightning.pytorch as pl
     from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
     
     print("\n=== Training TFT Model ===")
-    
-    # Create trainer with callbacks
+
+    # Create validation loader from training_dataset (non-shuffled)
+    val_dataloader = training_dataset.to_dataloader(train=False, batch_size=config['batch_size'], num_workers=0)
+
+    # Create trainer with validation monitoring
     trainer = pl.Trainer(
         max_epochs=config['max_epochs'],
         accelerator="auto",
         devices="auto",
         callbacks=[
             LearningRateMonitor(),
-            EarlyStopping(monitor="train_loss", min_delta=1e-4, patience=5, verbose=False, mode="min"),
+            EarlyStopping(monitor="val_loss", min_delta=1e-4, patience=5, verbose=False, mode="min"),
             ModelCheckpoint(
                 dirpath="checkpoints",
-                filename="tft-{epoch:02d}-{train_loss:.4f}",
-                monitor="train_loss",
+                filename="tft-{epoch:02d}-{val_loss:.4f}",
+                monitor="val_loss",
                 mode="min",
                 save_top_k=1
             )
         ],
         gradient_clip_val=0.1,
+        log_every_n_steps=10,
     )
     
-    print(f"✓ Trainer configured with {config['max_epochs']} max epochs")
+    print(f"✓ Trainer configured with {config['max_epochs']} max epochs (monitoring val_loss)")
     print("  - Early stopping enabled")
     print("  - Learning rate monitoring enabled")
     print("  - Model checkpointing enabled")
     
     # Train the model
     print("\nStarting model training...")
-    trainer.fit(tft, train_dataloaders=train_dataloader)
+    trainer.fit(tft, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
     print("✅ Training completed!")
     
     return trainer
@@ -626,7 +674,20 @@ def create_standalone_plot(predictions, actuals, config, df=None):
         plt.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.show()
+    
+    # Save to results directory with consistent naming
+    import os
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    results_dir = os.path.join(project_root, 'results')
+    os.makedirs(results_dir, exist_ok=True)
+    plot_path = os.path.join(results_dir, 'TSLA_TFT_with_reddit_sentiment_forecast.png')
+    try:
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        print(f"Plot saved to {plot_path}")
+    except Exception as e:
+        print(f"⚠️ Failed to save plot: {e}")
+    finally:
+        plt.show()
     
     print("✓ Standalone plot created successfully!")
 
@@ -717,7 +778,6 @@ def save_results_and_update_matrix(performance_metrics, config):
         # Save updated matrix to CSV in results directory
         csv_path = os.path.join(results_dir, "result_matrix.csv")
         matrix.to_csv(csv_path, index=True)
-        print(f"✓ Performance matrix updated and saved to {csv_path}!")
         
         # Display updated matrix
         print(f"\n📋 Updated Results Matrix:")
@@ -784,7 +844,7 @@ def main():
     tft, train_dataloader = create_model_and_dataloader(training_dataset, config)
     
     # Train model
-    trainer = train_model(tft, train_dataloader, config)
+    trainer = train_model(tft, train_dataloader, training_dataset, config)
     
     # Load best model and create validation dataset
     best_tft, val_dataloader = load_best_model_and_validate(trainer, training_dataset, df, tft, config)

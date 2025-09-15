@@ -71,14 +71,25 @@ def get_user_input():
         except ValueError:
             print("⚠️  Invalid date format. Please use YYYY-MM-DD")
     
-    # Get training end date
+    # Compute default end date so that training covers 96 rows from the chosen start (or as many as available)
+    desired_rows = 96
+    df_after_start = df.loc[df["date"] >= train_start_dt].sort_values("date")
+    if len(df_after_start) >= 1:
+        end_idx = min(desired_rows - 1, len(df_after_start) - 1)
+        train_end_default_dt = pd.to_datetime(df_after_start.iloc[end_idx]["date"])  # 96th row (or last)
+    else:
+        train_end_default_dt = max_date
+
+    # Get training end date (default = computed 96-row end)
     while True:
         try:
-            train_end = input(f"📉 Enter training end date (YYYY-MM-DD) [default: {max_date.strftime('%Y-%m-%d')}]: ").strip()
+            prompt_default = train_end_default_dt.strftime('%Y-%m-%d')
+            train_end = input(f"📉 Enter training end date (YYYY-MM-DD) [default: {prompt_default}]: ").strip()
             if not train_end:
-                train_end = max_date.strftime('%Y-%m-%d')
+                train_end_dt = train_end_default_dt
+            else:
+                train_end_dt = pd.to_datetime(train_end)
             
-            train_end_dt = pd.to_datetime(train_end)
             if train_end_dt <= train_start_dt:
                 print("⚠️  Training end date must be after start date")
                 continue
@@ -297,6 +308,21 @@ def main():
         with open(results_pkl, "wb") as f:
             pickle.dump(matrix, f)
         print(f"\n💾 Results saved to {results_pkl}")
+
+        # Also update the global CSV matrix (results/result_matrix.csv) so it's easy to view
+        results_csv = results_dir / "result_matrix.csv"
+        try:
+            if results_csv.exists():
+                global_matrix = pd.read_csv(results_csv, index_col=0)
+            else:
+                global_matrix = pd.DataFrame(columns=["MAE", "MSE", "RMSE"])
+            global_matrix.loc["ARIMA"] = [mae, mse, rmse]
+            global_matrix.to_csv(results_csv)
+            print(f"✓ Global results matrix updated: {results_csv}")
+            print("\n📋 Global Results Matrix:")
+            print(global_matrix)
+        except Exception as e:
+            print(f"⚠️  Failed to update global results matrix CSV: {e}")
     else:
         print("  ⚠️  No test data available for performance evaluation")
         print("  📊 Only predictions generated")
@@ -372,7 +398,7 @@ def main():
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     
-    # Save the plot
+    # Save the plot under results/
     plot_path = results_dir / f'{ticker}_ARIMA_forecast.png'
     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
     print(f"✓ Plot saved to {plot_path}")

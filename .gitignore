@@ -194,3 +194,8 @@ cython_debug/
 
 # Per-notebook secrets
 notebooks/.env
+
+# Training artifacts (do not version)
+notebooks/checkpoints/
+notebooks/lightning_logs/
+results/*.ckpt
