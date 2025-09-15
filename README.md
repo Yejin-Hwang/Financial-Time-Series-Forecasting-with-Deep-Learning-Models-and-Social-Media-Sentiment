@@ -6,7 +6,7 @@ Clean, reproducible pipelines for forecasting stock prices using ARIMA, Google T
 
 ### Pipeline overview
 
-Add the following image at `assets/pipeline-overview.png` to render the diagram:
+Add the following image at `docs/pipeline_overview.png` to render the diagram:
 
 ![Pipeline Overview](docs/pipeline_overview.png)
 
@@ -19,8 +19,9 @@ pip install -r requirements.txt
 
 2) Open a notebook under `notebooks/` (e.g., `3_tft_baseline_runner.ipynb` or `4_tft_with_reddit_sentiment_runner.ipynb`)
 
-3) In the parameters/first cell, set a `training_start_date` within the available date range
+3) When prompted, enter `training_start_date`
 
+   - Enter a date within the displayed available range (the notebook validates this)
    - Default context window: 96 trading days
    - Default forecast horizon: 5 trading days
 
@@ -35,7 +36,9 @@ Data extraction (Reddit, Yahoo Finance API) is optional—only needed if you wan
 pip install -r requirements.txt
 ```
 
-2) Prepare datasets (optional, only if refreshing raw data)
+2) Prepare datasets (optional — notebooks can handle this)
+- Prefer notebooks first: `notebooks/stock_data_extraction.ipynb` and `notebooks/reddit_tsla_sentiment_extraction.ipynb` walk you through extraction and feature building end-to-end.
+- If you prefer CLI, use the commands below.
 - Download historical OHLCV and engineer base features (TSLA default):
 ```bash
 python -c "from models.stock_data_extraction import run_stock_data_extraction; run_stock_data_extraction('TSLA')"
@@ -65,6 +68,16 @@ output_csv='data/interim/activitiy recognition/spike_data.csv', ticker='TSLA', s
 - `notebooks/activity_timing_spike_detection.ipynb` (delegates to `models/activity_timing.py`)
 - `notebooks/wordcloud_analysis.ipynb` (delegates to `models/wordcloud.py`)
 - `notebooks/sentiment_analysis.ipynb` (VADER vs FinBERT vs DistilBERT benchmark)
+
+## What is OHLCV?
+
+- Open: period start price
+- High: highest price in the period
+- Low: lowest price in the period
+- Close: period end price
+- Volume: traded quantity in the period
+
+The period can be daily, hourly, etc. Some sources also provide Adjusted Close (dividends/splits).
 
 ## Top Results
 
