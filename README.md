@@ -6,9 +6,9 @@ Clean, reproducible pipelines for forecasting stock prices using ARIMA, Google T
 
 ### Pipeline overview
 
-Add the following image at `docs/assets/pipeline-overview.png` to render the diagram:
+Add the following image at `assets/pipeline-overview.png` to render the diagram:
 
-![Pipeline Overview](docs/assets/pipeline-overview.png)
+![Pipeline Overview](assets/pipeline-overview.png)
 
 If you already have processed features in `data/processed/` (default repo includes TSLA/AAPL/NVDA), you can skip raw data extraction and run the notebooks directly:
 
