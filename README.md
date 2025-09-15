@@ -2,6 +2,32 @@
 
 Clean, reproducible pipelines for forecasting stock prices using ARIMA, Google TimesFM, Amazon Chronos, and Temporal Fusion Transformer (TFT), with optional Reddit sentiment and activity features.
 
+## Quickstart (processed data ready)
+
+### Pipeline overview
+
+Add the following image at `docs/assets/pipeline-overview.png` to render the diagram:
+
+![Pipeline Overview](docs/assets/pipeline-overview.png)
+
+If you already have processed features in `data/processed/` (default repo includes TSLA/AAPL/NVDA), you can skip raw data extraction and run the notebooks directly:
+
+1) Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+2) Open a notebook under `notebooks/` (e.g., `3_tft_baseline_runner.ipynb` or `4_tft_with_reddit_sentiment_runner.ipynb`)
+
+3) In the parameters/first cell, set a `training_start_date` within the available date range
+
+   - Default context window: 96 trading days
+   - Default forecast horizon: 5 trading days
+
+4) Run all cells to train and generate the forecast/plots. Results are saved to `results/`.
+
+Data extraction (Reddit, Yahoo Finance API) is optional—only needed if you want to refresh or expand the datasets.
+
 ## How to run the code
 
 1) Install dependencies
@@ -9,7 +35,7 @@ Clean, reproducible pipelines for forecasting stock prices using ARIMA, Google T
 pip install -r requirements.txt
 ```
 
-2) Prepare datasets (one-time or as needed)
+2) Prepare datasets (optional, only if refreshing raw data)
 - Download historical OHLCV and engineer base features (TSLA default):
 ```bash
 python -c "from models.stock_data_extraction import run_stock_data_extraction; run_stock_data_extraction('TSLA')"
@@ -38,7 +64,7 @@ output_csv='data/interim/activitiy recognition/spike_data.csv', ticker='TSLA', s
 4) Optional analysis notebooks
 - `notebooks/activity_timing_spike_detection.ipynb` (delegates to `models/activity_timing.py`)
 - `notebooks/wordcloud_analysis.ipynb` (delegates to `models/wordcloud.py`)
-- `notebooks/Sentiment Analysis.ipynb` (VADER vs FinBERT vs DistilBERT benchmark)
+- `notebooks/sentiment_analysis.ipynb` (VADER vs FinBERT vs DistilBERT benchmark)
 
 ## Top Results
 
