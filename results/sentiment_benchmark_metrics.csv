@@ -1,0 +1,5 @@
+dataset,vader,finbert,distilbert,best_model,best_accuracy
+Sentences_AllAgree.txt,0.5707,0.9717,0.2584,finbert,0.9717
+Sentences_75Agree.txt,0.5627,0.9473,0.2667,finbert,0.9473
+Sentences_66Agree.txt,0.5563,0.9182,0.2912,finbert,0.9182
+Sentences_50Agree.txt,0.5429,0.8896,0.2992,finbert,0.8896

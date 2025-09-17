@@ -22,6 +22,7 @@ from typing import Optional, Tuple
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from pathlib import Path
 from pandas.tseries.holiday import USFederalHolidayCalendar
 from sklearn.metrics import mean_squared_error
 from statsmodels.nonparametric.smoothers_lowess import lowess
@@ -162,6 +163,7 @@ def plot_results(
     loess_upper: np.ndarray,
     mean_plus_3std: float,
     close_price: Optional[pd.Series] = None,
+    save_second_plot_path: Optional[str] = None,
 ) -> None:
     """Plot daily post counts with smoothing/thresholds, and optional close price overlay."""
     import matplotlib.pyplot as plt
@@ -200,6 +202,10 @@ def plot_results(
 
         plt.title('Spike Detection & Stock Price')
         fig.tight_layout()
+        if save_second_plot_path:
+            save_path = Path(save_second_plot_path)
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            fig.savefig(str(save_path), dpi=150, bbox_inches='tight')
         plt.show()
 
 
@@ -247,7 +253,16 @@ def run_activity_timing(
             close_price = None
 
     if show_plots:
-        plot_results(result[['impact_trading_day', 'post_count']], smoothed, loess_upper, mean_plus_3std, close_price)
+        # Save the second plot (with price overlay) to the results folder
+        save_second_plot_path = str(Path('results') / f"{ticker}_activity_timing_spike_price.png")
+        plot_results(
+            result[['impact_trading_day', 'post_count']],
+            smoothed,
+            loess_upper,
+            mean_plus_3std,
+            close_price,
+            save_second_plot_path=save_second_plot_path,
+        )
 
     if output_csv:
         result.to_csv(output_csv, index=False)
