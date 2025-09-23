@@ -1,5 +1,8 @@
-# Data
-/data/
+# Data - allow processed data to be tracked
+/data/*
+!/data/processed/
+!/data/interim/
+!/data/external/
 
 # Mac OS-specific storage files
 .DS_Store
