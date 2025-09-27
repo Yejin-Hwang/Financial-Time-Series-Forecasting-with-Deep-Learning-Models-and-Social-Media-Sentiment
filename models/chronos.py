@@ -25,6 +25,8 @@ warnings.filterwarnings('ignore')
 def _resolve_tsla_csv_path() -> str:
     base_dir = Path(__file__).resolve().parent.parent
     candidates = [
+        base_dir / 'data' / 'processed' / 'tsla_price_sentiment_spike.csv',
+        base_dir / 'data' / 'processed' / 'TSLA_full_features.csv',
         Path('TSLA_close.csv'),
         base_dir / 'data' / 'TSLA_close.csv',
         base_dir / 'data' / 'raw' / 'TSLA_close.csv',
@@ -91,18 +93,35 @@ def _dummy_forecast(df_train: pd.DataFrame, prediction_length: int) -> np.ndarra
 
 
 def _plot(df_train: pd.DataFrame, df_test: pd.DataFrame, median: np.ndarray, low: Optional[np.ndarray], high: Optional[np.ndarray], ticker: str) -> None:
-    plt.figure(figsize=(14, 7))
-    plt.plot(df_train['date'], df_train['close'], color='dimgray', linewidth=2, label=f'Training Data')
+    # Set style to match TFT with sentiment
+    try:
+        plt.style.use('seaborn-v0_8')
+    except:
+        plt.style.use('default')
+    
+    plt.figure(figsize=(16, 8))
+    # Plot training data with TFT-style colors
+    plt.plot(df_train['date'], df_train['close'], color='blue', linewidth=2, alpha=0.7, label='Training Data (Close Price)')
     if not df_test.empty:
-        plt.plot(df_test['date'], df_test['close'], color='red', linewidth=2, marker='o', markersize=6, label='Actual (Test)')
+        plt.plot(df_test['date'], df_test['close'], color='green', linewidth=2, marker='s', markersize=6, label='Actual (Close Price)')
     if median is not None:
-        plt.plot(df_test['date'], median, color='blue', linewidth=2, marker='s', markersize=6, label='Chronos Prediction (Median)')
+        plt.plot(df_test['date'], median, color='red', linewidth=3, linestyle='--', marker='o', markersize=8, label='Predictions')
     if low is not None and high is not None:
-        plt.fill_between(df_test['date'], low, high, color='royalblue', alpha=0.3, label='30-80% Prediction Interval')
-    plt.title(f'{ticker} Stock Price Forecast: Chronos vs Actual')
-    plt.xlabel('Date')
-    plt.ylabel('Close Price (USD)')
-    plt.legend(loc='upper left')
+        plt.fill_between(df_test['date'], low, high, color='red', alpha=0.2, label='30-80% Prediction Interval')
+    
+    # Add vertical line to separate training and prediction
+    if not df_test.empty:
+        plt.axvline(x=df_test['date'].iloc[0], color='gray', linestyle='--', alpha=0.7, 
+                   label='Training End / Prediction Start')
+    # Add title with training info - use actual training data count
+    actual_training_days = len(df_train)
+    pred_days = len(df_test) if not df_test.empty else 5
+    title = f'Chronos Model: {actual_training_days} Days Training + {pred_days} Days Prediction'
+    
+    plt.title(title, fontsize=14, fontweight='bold')
+    plt.xlabel('Date', fontsize=12)
+    plt.ylabel('Stock Price (USD)', fontsize=12)
+    plt.legend(loc='upper left', fontsize=10)
     plt.grid(True, alpha=0.3)
     plt.xticks(rotation=45)
     plt.tight_layout()

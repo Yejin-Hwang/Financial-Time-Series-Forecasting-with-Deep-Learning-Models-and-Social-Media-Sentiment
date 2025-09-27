@@ -28,6 +28,8 @@ def _resolve_tsla_csv_path() -> str:
     """Resolve path to TSLA_close.csv across common project locations."""
     base_dir = Path(__file__).resolve().parent.parent  # project root
     candidates = [
+        base_dir / "data" / "processed" / "tsla_price_sentiment_spike.csv",
+        base_dir / "data" / "processed" / "TSLA_full_features.csv",
         Path("TSLA_close.csv"),
         base_dir / "data" / "TSLA_close.csv",
         base_dir / "data" / "raw" / "TSLA_close.csv",
@@ -347,6 +349,12 @@ def main():
     # 12. Visualization
     print(f"\n🎨 Creating visualization...")
     
+    # Set style to match TFT with sentiment
+    try:
+        plt.style.use('seaborn-v0_8')
+    except:
+        plt.style.use('default')
+    
     plt.figure(figsize=(16, 8))
     
     # Create date range for training data
@@ -354,18 +362,18 @@ def main():
     if has_test_data:
         test_dates = df_test['date'].values
     
-    # Plot training data with actual dates
-    plt.plot(df_train['date'], df_train['close'], label='Training Data', 
-             color='blue', linewidth=2, alpha=0.8)
+    # Plot training data with TFT-style colors
+    plt.plot(df_train['date'], df_train['close'], label='Training Data (Close Price)', 
+             color='blue', linewidth=2, alpha=0.7)
     
     # Plot test data if available
     if has_test_data:
-        plt.plot(df_test['date'], df_test['close'], label='Actual Test Data', 
-                 color='red', linewidth=2, marker='o', markersize=6)
+        plt.plot(df_test['date'], df_test['close'], label='Actual (Close Price)', 
+                 color='green', linewidth=2, marker='s', markersize=6)
         
         # Plot forecast for test period
-        plt.plot(df_test['date'], forecast_test_mean, label='ARIMA Forecast (Test)', 
-                 color='green', linewidth=2, linestyle='--', marker='s', markersize=6)
+        plt.plot(df_test['date'], forecast_test_mean, label='Predictions', 
+                 color='red', linewidth=3, linestyle='--', marker='o', markersize=8)
         
         # Add confidence intervals for test period if available
         try:
@@ -373,27 +381,30 @@ def main():
             plt.fill_between(df_test['date'], 
                              forecast_ci.iloc[:, 0], 
                              forecast_ci.iloc[:, 1], 
-                             alpha=0.2, color='green', label='95% Confidence Interval (Test)')
+                             alpha=0.2, color='red', label='95% Confidence Interval')
         except:
             pass
     
     # Plot main predictions
     plt.plot(future_dates, forecast_pred_mean, label=f'ARIMA Predictions ({pred_days} days)', 
-             color='purple', linewidth=3, linestyle='-', marker='D', markersize=8)
+             color='red', linewidth=3, linestyle='--', marker='o', markersize=8)
     
-    # Plot extended forecast for visualization
-    extended_future_dates = [train_end_dt + pd.Timedelta(days=i+1) for i in range(len(forecast_long_mean))]
-    plt.plot(extended_future_dates, forecast_long_mean, label='Extended Forecast (20 days)', 
-             color='orange', linewidth=2, linestyle=':', alpha=0.7)
+    # Add vertical line to separate training and prediction
+    plt.axvline(x=train_end_dt, color='gray', linestyle='--', alpha=0.7, 
+               label='Training End / Prediction Start')
     
     # Format x-axis to show dates nicely
     plt.gca().xaxis.set_major_locator(plt.matplotlib.dates.WeekdayLocator(interval=1))
     plt.gca().xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y-%m-%d'))
     plt.gcf().autofmt_xdate()  # Rotate and align the tick labels
     
+    # Add title with training info - use actual training data count
+    actual_training_days = len(df_train)
+    title = f'ARIMA Model: {actual_training_days} Days Training + {pred_days} Days Prediction'
+    
     plt.xlabel('Date', fontsize=12)
-    plt.ylabel('Stock Price ($)', fontsize=12)
-    plt.title(f'{ticker} ARIMA Forecast Results', fontsize=14, fontweight='bold')
+    plt.ylabel('Stock Price (USD)', fontsize=12)
+    plt.title(title, fontsize=14, fontweight='bold')
     plt.legend(fontsize=10)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()

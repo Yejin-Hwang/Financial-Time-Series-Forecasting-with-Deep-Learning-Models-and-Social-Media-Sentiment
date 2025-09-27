@@ -94,6 +94,8 @@ def _resolve_tsla_csv_path() -> str:
     """Resolve path to TSLA_close.csv across common project locations."""
     base_dir = Path(__file__).resolve().parent.parent  # project root
     candidates = [
+        base_dir / "data" / "processed" / "tsla_price_sentiment_spike.csv",
+        base_dir / "data" / "processed" / "TSLA_full_features.csv",
         Path("TSLA_close.csv"),
         base_dir / "data" / "TSLA_close.csv",
         base_dir / "data" / "raw" / "TSLA_close.csv",
@@ -154,12 +156,11 @@ def _split_train_test(
 def _init_timesfm(backend: str = "cpu", per_core_batch_size: int = 1,
                   context_len: int = 96, horizon_len: int = 5) -> object | None:
     try:
-        import timesfm as _timesfm  # Lazy import to avoid kernel crashes on import
-    except Exception as e:
-        print(f"TimesFM import failed: {e}")
-        return None
-
-    try:
+        # Import TimesFM
+        import timesfm as _timesfm
+        print("✓ TimesFM imported successfully")
+        
+        # Initialize the actual TimesFM model
         tfm = _timesfm.TimesFm(
             hparams=_timesfm.TimesFmHparams(
                 backend=backend,
@@ -173,10 +174,13 @@ def _init_timesfm(backend: str = "cpu", per_core_batch_size: int = 1,
                 huggingface_repo_id="google/timesfm-2.0-500m-pytorch"
             ),
         )
+        print("✓ TimesFM model initialized successfully")
         return tfm
+        
     except Exception as e:
         print(f"TimesFM initialization failed: {e}")
-        return None
+        print("Using enhanced simulation instead...")
+        return None  # Return None to trigger simulation
 
 
 def _prepare_input_df(df_train: pd.DataFrame) -> pd.DataFrame:
@@ -189,16 +193,20 @@ def _prepare_input_df(df_train: pd.DataFrame) -> pd.DataFrame:
 
 def _forecast_with_timesfm(tfm: object | None, df_train: pd.DataFrame, horizon: int = 5) -> pd.DataFrame:
     input_df = _prepare_input_df(df_train)
+    
     if tfm is None:
-        return _dummy_forecast(df_train, horizon)
+        raise ValueError("TimesFM model is not available. Please ensure TimesFM is properly installed with all dependencies.")
 
     try:
+        print("Using actual TimesFM model for prediction...")
         forecast_df = tfm.forecast_on_df(
             inputs=input_df,
             freq="D",
             value_name="y",
             num_jobs=-1,
         )
+        print("✓ TimesFM forecast completed successfully")
+        
         # Ensure expected columns exist
         if "timesfm" not in forecast_df.columns:
             # Some versions may use a different value column name; fallback to 'yhat'
@@ -209,32 +217,27 @@ def _forecast_with_timesfm(tfm: object | None, df_train: pd.DataFrame, horizon: 
         return forecast_df
     except Exception as e:
         print(f"TimesFM forecast failed: {e}")
-        return _dummy_forecast(df_train, horizon)
+        raise e
 
 
-def _dummy_forecast(df_train: pd.DataFrame, horizon: int = 5) -> pd.DataFrame:
-    last_date = df_train["date"].max()
-    dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=horizon, freq="D")
-    base = float(df_train["close"].iloc[-1])
-    return pd.DataFrame({
-        "unique_id": [df_train["unique_id"].iloc[0] if not df_train.empty else "TSLA"] * horizon,
-        "ds": dates,
-        "timesfm": base * (1 + np.random.normal(0, 0.02, horizon)),
-        "timesfm-q-0.1": base * (1 + np.random.normal(-0.05, 0.01, horizon)),
-        "timesfm-q-0.5": base * (1 + np.random.normal(0, 0.02, horizon)),
-        "timesfm-q-0.9": base * (1 + np.random.normal(0.05, 0.01, horizon)),
-    })
+
 
 
 def _plot_results(df_train: pd.DataFrame, df_test: pd.DataFrame, forecast_df: pd.DataFrame, ticker: str) -> None:
-    plt.figure(figsize=(12, 6))
+    # Set style to match TFT with sentiment
+    try:
+        plt.style.use('seaborn-v0_8')
+    except:
+        plt.style.use('default')
+    
+    plt.figure(figsize=(16, 8))
 
-    # Actual training data
-    plt.plot(df_train["date"], df_train["close"], label="Training Data", color="dimgray", linewidth=2)
+    # Plot training data with TFT-style colors
+    plt.plot(df_train["date"], df_train["close"], label="Training Data (Close Price)", color="blue", linewidth=2, alpha=0.7)
 
     # Median prediction
     if "timesfm" in forecast_df.columns:
-        plt.plot(forecast_df["ds"], forecast_df["timesfm"], label="Predicted (Median)", color="blue", linewidth=2)
+        plt.plot(forecast_df["ds"], forecast_df["timesfm"], label="Predictions", color="red", linewidth=3, linestyle="--", marker="o", markersize=8)
 
     # Prediction interval (10-90%)
     if 'timesfm-q-0.1' in forecast_df.columns and 'timesfm-q-0.9' in forecast_df.columns:
@@ -242,19 +245,29 @@ def _plot_results(df_train: pd.DataFrame, df_test: pd.DataFrame, forecast_df: pd
             forecast_df["ds"],
             forecast_df['timesfm-q-0.1'],
             forecast_df['timesfm-q-0.9'],
-            color="blue",
+            color="red",
             alpha=0.2,
             label="10-90% Prediction Interval",
         )
 
     # Actual test data
     if not df_test.empty:
-        plt.plot(df_test["date"], df_test["close"], label="Test Actual", color="red", linestyle="--", linewidth=2)
+        plt.plot(df_test["date"], df_test["close"], label="Actual (Close Price)", color="green", linewidth=2, marker="s", markersize=6)
+    
+    # Add vertical line to separate training and prediction
+    if not df_test.empty:
+        plt.axvline(x=df_test["date"].iloc[0], color="gray", linestyle="--", alpha=0.7, 
+                   label="Training End / Prediction Start")
 
-    plt.xlabel("Date")
-    plt.ylabel("Stock Price ($)")
-    plt.title(f"{ticker} Stock Price Forecast vs Actual")
-    plt.legend()
+    # Add title with training info - use actual training data count
+    actual_training_days = len(df_train)
+    pred_days = len(forecast_df) if not forecast_df.empty else 5
+    title = f'TimesFM Model: {actual_training_days} Days Training + {pred_days} Days Prediction'
+    
+    plt.xlabel("Date", fontsize=12)
+    plt.ylabel("Stock Price (USD)", fontsize=12)
+    plt.title(title, fontsize=14, fontweight='bold')
+    plt.legend(fontsize=10)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
 
@@ -386,11 +399,11 @@ def main(ticker: str = "TSLA", test_days: int = 5,
         test_end_dt = pd.to_datetime(df_test["date"].max())
         print(f"🧾 Test period: {test_start_dt.strftime('%Y-%m-%d')} → {test_end_dt.strftime('%Y-%m-%d')}")
 
-    # 3) Model init and forecast (default to dummy to avoid crashes)
-    tfm = None
-    if use_model:
-        tfm = _init_timesfm(backend=backend, per_core_batch_size=per_core_batch_size,
-                            context_len=context_len, horizon_len=test_days)
+    # 3) Model init and forecast - Use actual TimesFM model
+    print("🚀 Initializing TimesFM model...")
+    tfm = _init_timesfm(backend=backend, per_core_batch_size=per_core_batch_size,
+                        context_len=context_len, horizon_len=test_days)
+    
     horizon = len(df_test) if len(df_test) > 0 else test_days
     forecast_df = _forecast_with_timesfm(tfm, df_train, horizon=horizon)
 

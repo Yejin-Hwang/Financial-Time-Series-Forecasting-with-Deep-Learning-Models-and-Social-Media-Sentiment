@@ -87,51 +87,33 @@ def get_user_config():
     
     # Training period: start date only, fixed 96-day window (based on data rows)
     from datetime import datetime, timedelta
-    while True:
-        try:
-            start_date_str = input("Enter start date (YYYY-MM-DD, e.g., 2023-01-01): ").strip()
-            training_days = 96
-            config = {
-                # end_date will be determined from data to cover next 96 rows
-                'training_type': 'start_date_window',
-                'training_days': training_days,
-                'start_date': start_date_str,
-                'end_date': None
-            }
-            break
-        except ValueError:
-            print("Invalid date format! Please use YYYY-MM-DD format.")
+    try:
+        start_date_str = input("Enter start date (YYYY-MM-DD, e.g., 2023-01-01): ").strip()
+    except EOFError:
+        # Auto-use default date when running in non-interactive mode
+        start_date_str = "2025-02-01"
+        print(f"Using default start date: {start_date_str}")
     
-    # Prediction horizon (fixed at 5 days)
-    prediction_days = 5
+    training_days = 96
+    config = {
+        'training_type': 'date_anchor',
+        'train_start': start_date_str,
+        'training_days': training_days,
+        'prediction_days': 5,
+        'max_epochs': 20,
+        'batch_size': 128,
+        'learning_rate': 0.03,
+    }
     
-    # Model hyperparameters
-    max_epochs = input("Enter max training epochs (default: 20): ").strip()
-    max_epochs = int(max_epochs) if max_epochs else 20
-    
-    batch_size = input("Enter batch size (default: 128): ").strip()
-    batch_size = int(batch_size) if batch_size else 128
-    
-    learning_rate = input("Enter learning rate (default: 0.03): ").strip()
-    learning_rate = float(learning_rate) if learning_rate else 0.03
-    
-    # Add hyperparameters to config
-    config.update({
-        'prediction_days': prediction_days,
-        'max_epochs': max_epochs,
-        'batch_size': batch_size,
-        'learning_rate': learning_rate
-    })
+    # All hyperparameters are already set in config above
     
     print(f"\n✓ Configuration set:")
-    if config.get('end_date'):
-        print(f"  - Training period: {config['start_date']} to {config['end_date']} ({training_days} days)")
-    else:
-        print(f"  - Training period: start at {config['start_date']} for {training_days} data rows")
-    print(f"  - Prediction horizon: {prediction_days} days")
-    print(f"  - Max epochs: {max_epochs}")
-    print(f"  - Batch size: {batch_size}")
-    print(f"  - Learning rate: {learning_rate}")
+    print(f"  - Training start: {config['train_start']}")
+    print(f"  - Training days: {config['training_days']}")
+    print(f"  - Prediction days: {config['prediction_days']}")
+    print(f"  - Max epochs: {config['max_epochs']}")
+    print(f"  - Batch size: {config['batch_size']}")
+    print(f"  - Learning rate: {config['learning_rate']}")
     
     return config
 
@@ -152,6 +134,7 @@ def load_and_prepare_data(file_path=None, config=None):
             project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             processed_dir = os.path.join(project_root, 'data', 'processed')
             candidates = [
+                os.path.join(processed_dir, 'tsla_price_sentiment_spike.csv'),
                 os.path.join(processed_dir, 'tsla_sentiment_spike.csv'),
                 os.path.join(processed_dir, 'TSLA_full_features.csv'),
                 os.path.join(project_root, 'data', 'TSLA_close.csv')
@@ -275,51 +258,37 @@ def load_and_prepare_data(file_path=None, config=None):
                     df['time_idx'] = range(len(df))
                     print(f"✓ Data filtered to date range: {start_date} to {end_date}")
                     print(f"  - Filtered shape: {df.shape}")
-        elif config and config.get('training_type') == 'start_date_window':
-            # Determine 96-row training window starting from start_date, plus prediction rows
-            start_date = pd.to_datetime(config['start_date'])
-            prediction_days = int(config.get('prediction_days', 5))
-            training_rows = int(config.get('training_days', 96))
-            window_rows = training_rows + prediction_days
-
-            # Find first index at or after start_date
-            start_mask = df['date'] >= start_date
-            if not start_mask.any():
-                max_date = df['date'].max()
-                max_date_str = max_date.strftime('%Y-%m-%d') if pd.notna(max_date) else str(max_date)
-                print(f"❌ Error: Start date {start_date.strftime('%Y-%m-%d')} is after available data ({max_date_str})")
-                return None
-
-            start_idx = start_mask.idxmax()
-            end_idx = start_idx + window_rows - 1
-
-            # Adjust if window exceeds dataset
-            if end_idx >= len(df):
-                end_idx = len(df) - 1
-                available_rows = end_idx - start_idx + 1
-                adjusted_training_rows = available_rows - prediction_days
-                if adjusted_training_rows < 10:
-                    print("❌ Error: Not enough data after start date to create a meaningful window")
-                    print(f"  - Available rows after start: {available_rows}")
-                    print(f"  - Required at least: {10 + prediction_days}")
-                    return None
-                print(f"⚠️ Adjusting training rows from {training_rows} to {adjusted_training_rows} due to dataset end")
-                training_rows = adjusted_training_rows
-                config['training_days'] = training_rows
-
-            df_filtered = df.iloc[start_idx:end_idx + 1].copy()
-            df = df_filtered
-            df['time_idx'] = range(len(df))
-
-            # Set end_date in config to last training row's date
-            end_training_idx = min(training_rows - 1, len(df) - prediction_days - 1)
-            if end_training_idx >= 0:
-                end_training_date = df['date'].iloc[end_training_idx].strftime('%Y-%m-%d')
-                config['end_date'] = end_training_date
-
-            print(f"✓ Windowed data from {config['start_date']} covering {training_rows} training rows + {prediction_days} prediction rows")
-            print(f"  - Effective training end date: {config.get('end_date', 'N/A')}")
-            print(f"  - Filtered shape: {df.shape}")
+        # Use date_anchor approach - use specified start date + 96 trading days
+        if config and config.get('training_type') == 'date_anchor':
+            print(f"✓ Using date_anchor approach with user-specified start date")
+            print(f"  - Training start: {config.get('train_start', 'auto from data')}")
+            print(f"  - Training days: {config.get('training_days', 96)}")
+            print(f"  - Prediction days: {config.get('prediction_days', 5)}")
+            
+            # Use user-specified start date + 96 trading days
+            training_days = config.get('training_days', 96)
+            start_date = config.get('train_start')
+            
+            if start_date:
+                # Find start index from user-specified date
+                start_date_dt = pd.to_datetime(start_date)
+                start_idx = df[df['date'] >= start_date_dt].index[0] if len(df[df['date'] >= start_date_dt]) > 0 else 0
+                # Use training_days + prediction_days to ensure we have enough data for both training and prediction
+                prediction_days = config.get('prediction_days', 5)
+                total_days = training_days + prediction_days
+                end_idx = min(start_idx + total_days, len(df))
+                df = df.iloc[start_idx:end_idx].copy()
+                df['time_idx'] = range(len(df))
+                print(f"✓ Using {training_days} training days + {prediction_days} prediction days from {start_date}")
+                print(f"  - Total data range: {df['date'].iloc[0]} to {df['date'].iloc[-1]}")
+                print(f"  - Total data points: {len(df)}")
+            else:
+                # Fallback to last 96 days if no start date specified
+                df = df.tail(training_days).copy()
+                df['time_idx'] = range(len(df))
+                print(f"✓ No start date specified, using last {training_days} days")
+                print(f"  - Training data range: {df['date'].iloc[0]} to {df['date'].iloc[-1]}")
+                print(f"  - Training data points: {len(df)}")
         
         return df
         
@@ -372,9 +341,20 @@ def create_tft_dataset(df, config):
         config['training_days'] = max_encoder_length
         print(f"  - Adjusted encoder length: {max_encoder_length} days")
     
-    training_cutoff = df["time_idx"].max() - max_prediction_length
+    # Calculate training cutoff - ensure we have enough data for training
+    max_time_idx = df["time_idx"].max()
+    training_cutoff = max_time_idx - max_prediction_length
     
-    print(f"  - Training cutoff: time_idx {training_cutoff}")
+    # Ensure we have enough data for training
+    if training_cutoff < max_encoder_length:
+        # Adjust encoder length to use all available data
+        max_encoder_length = training_cutoff
+        print(f"  - Adjusted encoder length to {max_encoder_length} to use all available data")
+        training_cutoff = max_time_idx
+        print(f"  - Using all {len(df)} data points for training")
+    else:
+        print(f"  - Training cutoff: time_idx {training_cutoff}")
+        print(f"  - Available training data points: {len(df[df['time_idx'] <= training_cutoff])}")
     
     # Ensure training dataset retains at least one full (encoder+decoder) window
     # If dataset is small (e.g., start_date_window with encoder==training_days),
@@ -390,10 +370,10 @@ def create_tft_dataset(df, config):
     # Define time-varying features
     time_varying_known_reals = [
         "time_idx", "month", "day_of_week", "quarter", "year", 
-        "is_month_end", "is_month_start", "days_since_earning"
+        "is_month_end", "is_month_start", "days_since_earning", "rolling_volatility"
     ]
     
-    time_varying_unknown_reals = ["close", "volume", "rolling_volatility"]
+    time_varying_unknown_reals = ["close", "volume"]
     
     # Filter out features that don't exist in the dataset
     available_features = df.columns.tolist()
@@ -644,6 +624,14 @@ def create_visualizations(predictions, actuals, config, df=None):
     
     print("\n=== Creating Visualizations ===")
     
+    # Debug: Check the data being passed to visualization
+    if df is not None:
+        print(f"DEBUG: Visualization df shape: {df.shape}")
+        print(f"DEBUG: Visualization df date range: {df['date'].iloc[0]} to {df['date'].iloc[-1]}")
+        print(f"DEBUG: Visualization df time_idx range: {df['time_idx'].min()} to {df['time_idx'].max()}")
+    else:
+        print("DEBUG: No df passed to visualization")
+    
     # Set style
     try:
         plt.style.use('seaborn-v0_8')
@@ -653,51 +641,6 @@ def create_visualizations(predictions, actuals, config, df=None):
     # Move to CPU for plotting
     predictions_cpu = predictions.cpu().numpy()
     actuals_cpu = actuals.cpu().numpy()
-    
-    # # Create figure with subplots
-    # fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-    # fig.suptitle(f'TFT Model Performance - {config["training_days"]} Days Training, {config["prediction_days"]} Days Prediction', 
-    #              fontsize=16, fontweight='bold')
-    
-    # # Plot 1: Predictions vs Actuals
-    # axes[0, 0].plot(actuals_cpu[0], 'b-', label='Actual', linewidth=2, marker='o')
-    # axes[0, 0].plot(predictions_cpu[0], 'r--', label='Prediction', linewidth=2, marker='s')
-    # axes[0, 0].set_title('Predictions vs Actuals')
-    # axes[0, 0].set_xlabel('Time Horizon (Days)')
-    # axes[0, 0].set_ylabel('Stock Price (Normalized)')
-    # axes[0, 0].legend()
-    # axes[0, 0].grid(True, alpha=0.3)
-    
-    # # Plot 2: Prediction Errors
-    # errors = np.abs(predictions_cpu[0] - actuals_cpu[0])
-    # axes[0, 1].bar(range(len(errors)), errors, color='orange', alpha=0.7)
-    # axes[0, 1].set_title('Absolute Prediction Errors')
-    # axes[0, 1].set_xlabel('Time Horizon (Days)')
-    # axes[0, 1].set_ylabel('Absolute Error')
-    # axes[0, 1].grid(True, alpha=0.3)
-    
-    # # Plot 3: Scatter plot of predictions vs actuals
-    # axes[1, 0].scatter(actuals_cpu.flatten(), predictions_cpu.flatten(), alpha=0.6, color='green')
-    # axes[1, 0].plot([actuals_cpu.min(), actuals_cpu.max()], [actuals_cpu.min(), actuals_cpu.max()], 'r--', lw=2)
-    # axes[1, 0].set_title('Predictions vs Actuals (Scatter)')
-    # axes[1, 0].set_xlabel('Actual Values')
-    # axes[1, 0].set_ylabel('Predicted Values')
-    # axes[1, 0].grid(True, alpha=0.3)
-    
-    # # Plot 4: Error distribution
-    # all_errors = (predictions_cpu - actuals_cpu).flatten()
-    # axes[1, 1].hist(all_errors, bins=20, color='skyblue', alpha=0.7, edgecolor='black')
-    # axes[1, 1].axvline(0, color='red', linestyle='--', linewidth=2, label='Zero Error')
-    # axes[1, 1].set_title('Prediction Error Distribution')
-    # axes[1, 1].set_xlabel('Prediction Error')
-    # axes[1, 1].set_ylabel('Frequency')
-    # axes[1, 1].legend()
-    # axes[1, 1].grid(True, alpha=0.3)
-    
-    # plt.tight_layout()
-    # plt.show()
-    
-    # print("✓ Visualizations created successfully!")
     
     # Create standalone Actual vs Prediction plot with training period
     create_standalone_plot(predictions, actuals, config, df)
@@ -767,11 +710,13 @@ def create_standalone_plot(predictions, actuals, config, df=None):
         plt.xlabel('Date', fontsize=12)
         plt.ylabel('Stock Price (USD)', fontsize=12)
         
-        # Add title with training info
+        # Add title with training info - use actual training data count
+        training_cutoff = df["time_idx"].max() - config["prediction_days"]
+        actual_training_days = len(df[df['time_idx'] <= training_cutoff])
         if config.get('training_type') == 'date_range':
             title = f'TFT Model: Training ({config["start_date"]} to {config["end_date"]}) + {config["prediction_days"]} Days Prediction'
         else:
-            title = f'TFT Model: {config["training_days"]} Days Training + {config["prediction_days"]} Days Prediction'
+            title = f'TFT Model: {actual_training_days} Days Training + {config["prediction_days"]} Days Prediction'
         
         plt.title(title, fontsize=14, fontweight='bold')
         plt.legend(fontsize=10)
@@ -983,8 +928,8 @@ def main():
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     processed_dir = os.path.join(project_root, 'data', 'processed')
     candidates = [
+        os.path.join(processed_dir, 'tsla_price_sentiment_spike.csv'),
         os.path.join(processed_dir, 'TSLA_full_features.csv'),
-        # os.path.join(processed_dir, 'tsla_price_sentiment_spike.csv'),
         os.path.join(project_root, 'data', 'TSLA_close.csv')
     ]
     data_path = next((p for p in candidates if os.path.exists(p)), candidates[0])

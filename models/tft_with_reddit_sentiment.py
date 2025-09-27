@@ -80,7 +80,12 @@ def import_libraries():
 def get_user_config():
     """Ask for training start date only; auto 96-day training + 5-day prediction."""
     print("\n=== TFT Configuration (96-day training, 5-day prediction) ===")
-    start_date_str = input("📅 Enter training start date (YYYY-MM-DD): ").strip()
+    try:
+        start_date_str = input("📅 Enter training start date (YYYY-MM-DD): ").strip()
+    except EOFError:
+        # Auto-use default date when running in non-interactive mode
+        start_date_str = "2025-02-01"
+        print(f"Using default start date: {start_date_str}")
 
     config = {
         'training_type': 'date_anchor',
@@ -212,6 +217,38 @@ def load_and_prepare_data(file_path="tsla_price_sentiment_spike.csv", config=Non
                     print(f"✓ Data filtered to date range: {start_date} to {end_date}")
                     print(f"  - Filtered shape: {df.shape}")
         
+        # Use date_anchor approach - use specified start date + 96 trading days
+        if config and config.get('training_type') == 'date_anchor':
+            print(f"✓ Using date_anchor approach with user-specified start date")
+            print(f"  - Training start: {config.get('train_start', 'auto from data')}")
+            print(f"  - Training days: {config.get('training_days', 96)}")
+            print(f"  - Prediction days: {config.get('prediction_days', 5)}")
+            
+            # Use user-specified start date + 96 trading days
+            training_days = config.get('training_days', 96)
+            start_date = config.get('train_start')
+            
+            if start_date:
+                # Find start index from user-specified date
+                start_date_dt = pd.to_datetime(start_date)
+                start_idx = df[df['date'] >= start_date_dt].index[0] if len(df[df['date'] >= start_date_dt]) > 0 else 0
+                # Use training_days + prediction_days to ensure we have enough data for both training and prediction
+                prediction_days = config.get('prediction_days', 5)
+                total_days = training_days + prediction_days
+                end_idx = min(start_idx + total_days, len(df))
+                df = df.iloc[start_idx:end_idx].copy()
+                df['time_idx'] = range(len(df))
+                print(f"✓ Using {training_days} training days + {prediction_days} prediction days from {start_date}")
+                print(f"  - Total data range: {df['date'].iloc[0]} to {df['date'].iloc[-1]}")
+                print(f"  - Total data points: {len(df)}")
+            else:
+                # Fallback to last 96 days if no start date specified
+                df = df.tail(training_days).copy()
+                df['time_idx'] = range(len(df))
+                print(f"✓ No start date specified, using last {training_days} days")
+                print(f"  - Training data range: {df['date'].iloc[0]} to {df['date'].iloc[-1]}")
+                print(f"  - Training data points: {len(df)}")
+
         # Display first few rows
         print("\nFirst few rows:")
         print(df.head())
@@ -267,9 +304,20 @@ def create_tft_dataset(df, config):
         config['training_days'] = max_encoder_length
         print(f"  - Adjusted encoder length: {max_encoder_length} days")
     
-    training_cutoff = df["time_idx"].max() - max_prediction_length
+    # Calculate training cutoff - ensure we have enough data for training
+    max_time_idx = df["time_idx"].max()
+    training_cutoff = max_time_idx - max_prediction_length
     
-    print(f"  - Training cutoff: time_idx {training_cutoff}")
+    # Ensure we have enough data for training
+    if training_cutoff < max_encoder_length:
+        # Adjust encoder length to use all available data
+        max_encoder_length = training_cutoff
+        print(f"  - Adjusted encoder length to {max_encoder_length} to use all available data")
+        training_cutoff = max_time_idx
+        print(f"  - Using all {len(df)} data points for training")
+    else:
+        print(f"  - Training cutoff: time_idx {training_cutoff}")
+        print(f"  - Available training data points: {len(df[df['time_idx'] <= training_cutoff])}")
     
     # Define time-varying features (engineered sentiment/spike features as known; target/price as unknown)
     time_varying_known_reals = [
@@ -368,27 +416,37 @@ def train_model(tft, train_dataloader, training_dataset, config):
     # Create validation loader from training_dataset (non-shuffled)
     val_dataloader = training_dataset.to_dataloader(train=False, batch_size=config['batch_size'], num_workers=0)
 
+    # Create callbacks
+    early_stopping = EarlyStopping(
+        monitor="train_loss", 
+        min_delta=1e-4, 
+        patience=5, 
+        verbose=True, 
+        mode="min"
+    )
+    
+    lr_monitor = LearningRateMonitor(logging_interval='step')
+    
+    checkpoint_callback = ModelCheckpoint(
+        monitor='train_loss',
+        dirpath='./checkpoints',
+        filename='tft-{epoch:02d}-{train_loss:.4f}',
+        save_top_k=3,
+        mode='min',
+    )
+
     # Create trainer with validation monitoring
     trainer = pl.Trainer(
         max_epochs=config['max_epochs'],
         accelerator="auto",
         devices="auto",
-        callbacks=[
-            LearningRateMonitor(),
-            EarlyStopping(monitor="val_loss", min_delta=1e-4, patience=5, verbose=False, mode="min"),
-            ModelCheckpoint(
-                dirpath="checkpoints",
-                filename="tft-{epoch:02d}-{val_loss:.4f}",
-                monitor="val_loss",
-                mode="min",
-                save_top_k=1
-            )
-        ],
+        callbacks=[early_stopping, lr_monitor, checkpoint_callback],
         gradient_clip_val=0.1,
         log_every_n_steps=10,
+        enable_progress_bar=True,
     )
     
-    print(f"✓ Trainer configured with {config['max_epochs']} max epochs (monitoring val_loss)")
+    print(f"✓ Trainer configured with {config['max_epochs']} max epochs (monitoring train_loss)")
     print("  - Early stopping enabled")
     print("  - Learning rate monitoring enabled")
     print("  - Model checkpointing enabled")
@@ -523,50 +581,7 @@ def create_visualizations(predictions, actuals, config, df=None):
     predictions_cpu = predictions.cpu().numpy()
     actuals_cpu = actuals.cpu().numpy()
     
-    # # Create figure with subplots
-    # fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-    # fig.suptitle(f'TFT Model Performance (with Sentiment & Spike) - {config["training_days"]} Days Training, {config["prediction_days"]} Days Prediction', 
-    #              fontsize=16, fontweight='bold')
-    
-    # # Plot 1: Predictions vs Actuals
-    # axes[0, 0].plot(actuals_cpu[0], 'b-', label='Actual', linewidth=2, marker='o')
-    # axes[0, 0].plot(predictions_cpu[0], 'r--', label='Prediction', linewidth=2, marker='s')
-    # axes[0, 0].set_title('Predictions vs Actuals')
-    # axes[0, 0].set_xlabel('Time Horizon (Days)')
-    # axes[0, 0].set_ylabel('Stock Price (Normalized)')
-    # axes[0, 0].legend()
-    # axes[0, 0].grid(True, alpha=0.3)
-    
-    # # Plot 2: Prediction Errors
-    # errors = np.abs(predictions_cpu[0] - actuals_cpu[0])
-    # axes[0, 1].bar(range(len(errors)), errors, color='orange', alpha=0.7)
-    # axes[0, 1].set_title('Absolute Prediction Errors')
-    # axes[0, 1].set_xlabel('Time Horizon (Days)')
-    # axes[0, 1].set_ylabel('Absolute Error')
-    # axes[0, 1].grid(True, alpha=0.3)
-    
-    # # Plot 3: Scatter plot of predictions vs actuals
-    # axes[1, 0].scatter(actuals_cpu.flatten(), predictions_cpu.flatten(), alpha=0.6, color='green')
-    # axes[1, 0].plot([actuals_cpu.min(), actuals_cpu.max()], [actuals_cpu.min(), actuals_cpu.max()], 'r--', lw=2)
-    # axes[1, 0].set_title('Predictions vs Actuals (Scatter)')
-    # axes[1, 0].set_xlabel('Actual Values')
-    # axes[1, 0].set_ylabel('Predicted Values')
-    # axes[1, 0].grid(True, alpha=0.3)
-    
-    # # Plot 4: Error distribution
-    # all_errors = (predictions_cpu - actuals_cpu).flatten()
-    # axes[1, 1].hist(all_errors, bins=20, color='skyblue', alpha=0.7, edgecolor='black')
-    # axes[1, 1].axvline(0, color='red', linestyle='--', linewidth=2, label='Zero Error')
-    # axes[1, 1].set_title('Prediction Error Distribution')
-    # axes[1, 1].set_xlabel('Prediction Error')
-    # axes[1, 1].set_ylabel('Frequency')
-    # axes[1, 1].legend()
-    # axes[1, 1].grid(True, alpha=0.3)
-    
-    # plt.tight_layout()
-    # plt.show()
-    
-    # print("✓ Visualizations created successfully!")
+
     
     # Create standalone Actual vs Prediction plot with training period
     create_standalone_plot(predictions, actuals, config, df)
@@ -636,11 +651,13 @@ def create_standalone_plot(predictions, actuals, config, df=None):
         plt.xlabel('Date', fontsize=12)
         plt.ylabel('Stock Price (USD)', fontsize=12)
         
-        # Add title with training info
+        # Add title with training info - use actual training data count
+        training_cutoff = df["time_idx"].max() - config["prediction_days"]
+        actual_training_days = len(df[df['time_idx'] <= training_cutoff])
         if config.get('training_type') == 'date_range':
             title = f'TFT Model with Sentiment & Spike: Training ({config["start_date"]} to {config["end_date"]}) + {config["prediction_days"]} Days Prediction'
         else:
-            title = f'TFT Model with Sentiment & Spike: {config["training_days"]} Days Training + {config["prediction_days"]} Days Prediction'
+            title = f'TFT Model with Sentiment & Spike: {actual_training_days} Days Training + {config["prediction_days"]} Days Prediction'
         
         plt.title(title, fontsize=14, fontweight='bold')
         plt.legend(fontsize=10)

@@ -62,11 +62,11 @@ def run_stock_data_extraction(ticker: str, output_csv: Optional[str] = None) -> 
     df["is_month_end"] = df["Date"].dt.is_month_end.astype(int)              # 1 if end of month
     df["is_month_start"] = df["Date"].dt.is_month_start.astype(int)          # 1 if start of month
     
-    # Compute rolling volatility (10-day standard deviation of Close price)
-    df["rolling_volatility"] = df["Close"].rolling(window=10).std()
-    
     # Compute daily return (percentage change)
     df["return_1d"] = df["Close"].pct_change()
+    
+    # Compute rolling volatility (14-day standard deviation of returns)
+    df["rolling_volatility"] = df["return_1d"].rolling(window=14, min_periods=1).std()
     
     # Compute cumulative return over time
     df["cumulative_return"] = (1 + df["return_1d"]).cumprod()
