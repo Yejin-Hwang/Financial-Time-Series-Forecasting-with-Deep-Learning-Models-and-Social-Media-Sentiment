@@ -81,18 +81,95 @@ The period can be daily, hourly, etc. Some sources also provide Adjusted Close (
 
 ## Top Results
 
-Best overall RMSE on TSLA (lower is better), parsed from `results/result_matrix.csv`:
+Best overall RMSE on **TSLA** (lower is better), parsed from `results/result_matrix.csv`:
 
 | Model            |   MAE |    MSE |  RMSE |
 |------------------|------:|-------:|------:|
-| ARIMA            | 16.27 | 343.83 | 18.54 |
-| timesfm          | 16.72 | 324.36 | 18.01 |
-| chronos          | 10.58 | 192.24 | 13.86 |
-| TFT_reddit_N     |  7.73 |  82.47 |  9.08 |
-| **TFT_Reddit_Y** | **3.70** | **23.61** | **4.86** |
+| ARIMA            | 18.95 | 371.01 | 19.26 |
+| timesfm          | 23.23 | 583.64 | 24.16 |
+| chronos          | 17.68 | 332.02 | 18.22 |
+| TFT_reddit_N     | 10.49 | 117.57 | 10.84 |
+| **TFT_Reddit_Y** | **3.77** | **20.81** | **4.56** |
 
-- Winner: **TFT_Reddit_Y** (TFT + Reddit sentiment & spike features) with RMSE ≈ 4.86.
+- Winner: **TFT_Reddit_Y** (TFT + Reddit sentiment & spike features) with RMSE ≈ 4.56.
 - Metrics are computed on the forecast horizon produced by each notebook runner.
+
+## Results Visualizations
+
+### Model Forecasts (TSLA)
+
+<table>
+<tr>
+<td align="center" width="50%">
+<img src="results/TSLA_ARIMA_forecast.png" width="375">
+<br><b>ARIMA</b><br>RMSE: 19.26
+</td>
+<td align="center" width="50%">
+<img src="results/TSLA_TimesFM_forecast.png" width="375">
+<br><b>TimesFM</b><br>RMSE: 24.16
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<img src="results/TSLA_Chronos_forecast.png" width="375">
+<br><b>Chronos</b><br>RMSE: 18.22
+</td>
+<td align="center" width="50%">
+<img src="results/TSLA_TFT_baseline_forecast.png" width="375">
+<br><b>TFT Baseline</b><br>RMSE: 10.84
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<img src="results/TSLA_TFT_with_reddit_sentiment_forecast.png" width="375">
+<br><b>TFT with Reddit Sentiment</b><br>RMSE: 4.56 ⭐
+</td>
+<td align="center" width="50%">
+</td>
+</tr>
+</table>
+
+### TFT Model Interpretability
+
+#### Baseline TFT (Price Features Only)
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="results/TSLA_TFT_baseline_Attention.png" width="250">
+<br><b>Attention Patterns</b>
+</td>
+<td align="center" width="33%">
+<img src="results/TSLA_TFT_baseline_Encoder.png" width="250">
+<br><b>Encoder Visualization</b>
+</td>
+<td align="center" width="33%">
+<img src="results/TSLA_TFT_baseline_variable_importance_20250928_130820.png" width="250">
+<br><b>Variable Importance</b>
+</td>
+</tr>
+</table>
+
+#### TFT with Reddit Sentiment
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="results/TSLA_TFT_with_reddit_sentiment_Attention.png" width="250">
+<br><b>Attention Patterns</b>
+</td>
+<td align="center" width="33%">
+<img src="results/TSLA_TFT_with_reddit_sentiment_Encoder.png" width="250">
+<br><b>Encoder Visualization</b>
+</td>
+<td align="center" width="33%">
+<img src="results/TSLA_TFT_sentiment_variable_importance_20250928_142923.png" width="250">
+<br><b>Variable Importance</b>
+</td>
+</tr>
+</table>
+
+### Reddit Activity Analysis
+![TSLA Activity Timing Spike Detection](results/TSLA_activity_timing_spike_price.png)
+*Reddit activity spike detection mapped to TSLA price movements*
 
 ## Project structure
 
