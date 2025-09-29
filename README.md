@@ -131,6 +131,16 @@ Best overall RMSE on **TSLA** (lower is better), parsed from `results/result_mat
 
 ### TFT Model Interpretability
 
+The Temporal Fusion Transformer (TFT) model provides rich interpretability through attention mechanisms and variable importance analysis. These visualizations help understand how the model makes predictions and which features contribute most to the forecasting performance.
+
+**Key Insights from the Results:**
+
+- **Attention Patterns**: Baseline TFT shows concentrated attention on distant past periods (-80 to -60), while Reddit Sentiment TFT displays more dynamic attention across all time periods, indicating that sentiment data helps the model utilize information from various time horizons.
+
+- **Encoder Importance**: Baseline TFT prioritizes temporal features (`is_month_start`: 50%, `day_of_week`: 15%), while Reddit Sentiment TFT heavily focuses on sentiment features (`daily_sentiment_lag5`: 78%, `spike_presence_sum_3`: ~8%), showing sentiment data dominates the encoder's processing.
+
+- **Variable Importance**: Baseline TFT relies on temporal patterns (`is_month_start`: 24%, `year`: 21%), while Reddit Sentiment TFT shows overwhelming dependence on sentiment volatility (`daily_sentiment_std_14`: 98%), indicating that sentiment data's variability is the strongest predictor for stock price movements.
+
 #### Baseline TFT (Price Features Only)
 <table>
 <tr>
@@ -201,12 +211,22 @@ Best overall RMSE on **TSLA** (lower is better), parsed from `results/result_mat
 │   └── wordcloud_analysis.ipynb
 ├── results/
 │   ├── result_matrix.csv               # Aggregate results summary (top RMSE here)
+│   ├── sentiment_benchmark_metrics.csv # Sentiment model performance metrics
 │   ├── TSLA_results_matrix.pkl         # Persisted performance matrix
-│   └── wordcloud.png                   # Example output
+│   ├── TSLA_*_forecast.png             # Model forecast visualizations
+│   ├── TSLA_TFT_*_Attention.png        # TFT attention pattern visualizations
+│   ├── TSLA_TFT_*_Encoder.png          # TFT encoder importance plots
+│   ├── TSLA_TFT_*_variable_importance_*.png # TFT variable importance analysis
+│   └── TSLA_activity_timing_spike_price.png # Reddit activity spike detection
 ├── requirements.txt
 ├── pyproject.toml
 └── README.md
 ```
+
+**Note:** `*` represents wildcard patterns. For example:
+- `TSLA_*_forecast.png` includes: `TSLA_ARIMA_forecast.png`, `TSLA_TimesFM_forecast.png`, `TSLA_Chronos_forecast.png`, `TSLA_TFT_baseline_forecast.png`, `TSLA_TFT_with_reddit_sentiment_forecast.png`
+- `TSLA_TFT_*_Attention.png` includes: `TSLA_TFT_baseline_Attention.png`, `TSLA_TFT_with_reddit_sentiment_Attention.png`
+- `TSLA_TFT_*_variable_importance_*.png` includes all TFT variable importance plots with timestamps
 
 ## Notes
 - Set your Reddit API keys in `.env` as `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USER_AGENT` before running Reddit extraction.
