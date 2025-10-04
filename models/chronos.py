@@ -181,11 +181,14 @@ def main(
         mae = float(mean_absolute_error(y_true, y_pred))
         mse = float(mean_squared_error(y_true, y_pred))
         rmse = float(np.sqrt(mse))
+        eps = 1e-8
+        mape = float(np.mean(np.abs((y_true - y_pred) / np.clip(np.abs(y_true), eps, None))) * 100.0)
         print('Forecast Performance Metrics:')
         print(f'MAE:  {mae:.2f}')
         print(f'MSE:  {mse:.2f}')
         print(f'RMSE: {rmse:.2f}')
-        metrics = (mae, mse, rmse)
+        print(f'MAPE: {mape:.2f}%')
+        metrics = (mae, mse, rmse, mape)
 
     # Save results
     if metrics is not None:
@@ -199,9 +202,11 @@ def main(
                 with open(pkl_path, 'rb') as f:
                     matrix = pickle.load(f)
             else:
-                matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE'])
+                matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
         except Exception:
-            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE'])
+            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+        if 'MAPE' not in matrix.columns:
+            matrix = matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
         matrix.loc['chronos'] = list(metrics)
         try:
             with open(pkl_path, 'wb') as f:
@@ -215,8 +220,15 @@ def main(
             if csv_path.exists():
                 global_matrix = pd.read_csv(csv_path, index_col=0)
             else:
-                global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE'])
-            global_matrix.loc['chronos'] = list(metrics)
+                global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+            if 'MAPE' not in global_matrix.columns:
+                global_matrix = global_matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+            # Standardize key and reorder
+            global_matrix.loc['Chronos'] = list(metrics)
+            desired_order = ['ARIMA', 'TimesFM', 'Chronos', 'TFT_baseline', 'TFT_Reddit']
+            ordered = [i for i in desired_order if i in global_matrix.index]
+            rest = [i for i in global_matrix.index if i not in desired_order]
+            global_matrix = global_matrix.loc[ordered + rest]
             global_matrix.to_csv(csv_path)
             print('Results saved to matrix successfully!')
             print(global_matrix)

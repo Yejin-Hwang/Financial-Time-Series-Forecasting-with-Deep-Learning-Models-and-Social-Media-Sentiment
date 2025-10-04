@@ -92,7 +92,7 @@ def get_user_config():
         'train_start': start_date_str,
         'training_days': 96,
         'prediction_days': 5,
-        'max_epochs': 20,
+        'max_epochs': 30,
         'batch_size': 128,
         'learning_rate': 0.03,
     }
@@ -537,17 +537,23 @@ def evaluate_performance(predictions, actuals):
     rmse_metric = MeanSquaredError(squared=False)
     rmse = rmse_metric(predictions_cpu, actuals_cpu).item()
     
+    # Calculate MAPE as float (avoid tensor printing)
+    import torch as _torch
+    mape = (_torch.abs((actuals_cpu - predictions_cpu) / actuals_cpu)).mean().mul(100).item()
+    
     # Create performance metrics DataFrame
     metrics_df = pd.DataFrame({
         'Metric': [
             'MAE',
             'MSE',
-            'RMSE'
+            'RMSE',
+            'MAPE'
         ],
         'Value': [
             f'{mae:.4f}',
             f'{mse:.4f}',
-            f'{rmse:.4f}'
+            f'{rmse:.4f}',
+            f'{mape:.4f}'
         ]
     })
     
@@ -558,6 +564,7 @@ def evaluate_performance(predictions, actuals):
         'MAE': mae,
         'MSE': mse,
         'RMSE': rmse,
+        'MAPE': mape,
     }
 
 # =============================================================================
@@ -777,26 +784,75 @@ def save_results_and_update_matrix(performance_metrics, config):
                 matrix = pickle.load(f)
         else:
             # Create new matrix if it doesn't exist
-            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE'])
+            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+        # Ensure MAPE column exists
+        if 'MAPE' not in matrix.columns:
+            matrix = matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+        # Normalize legacy row keys
+        try:
+            if 'chronos' in matrix.index:
+                matrix = matrix.rename(index={'chronos': 'Chronos'})
+            if 'TFT_Reddit_Y' in matrix.index:
+                matrix = matrix.rename(index={'TFT_Reddit_Y': 'TFT_Reddit'})
+            if 'TFT_reddit_N' in matrix.index:
+                matrix = matrix.rename(index={'TFT_reddit_N': 'TFT_baseline'})
+        except Exception:
+            pass
         
         # Add new results
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        model_name = f"TFT_Reddit_Y"
+        model_name = "TFT_Reddit"
         matrix.loc[model_name] = [
             performance_metrics['MAE'],
             performance_metrics['MSE'],
-            performance_metrics['RMSE']
+            performance_metrics['RMSE'],
+            float(performance_metrics.get('MAPE', 0.0))
         ]
         
         # Save updated matrix to pickle
         with open(matrix_path, "wb") as f:
             pickle.dump(matrix, f)
         
-        # Save updated matrix to CSV in results directory
+        # Save updated matrix to CSV in results directory and ensure columns match
         csv_path = os.path.join(results_dir, "result_matrix.csv")
-        matrix.to_csv(csv_path, index=True)
+        try:
+            if os.path.exists(csv_path):
+                global_matrix = pd.read_csv(csv_path, index_col=0)
+            else:
+                global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+            if 'MAPE' not in global_matrix.columns:
+                global_matrix = global_matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+            # Normalize legacy row keys
+            if 'chronos' in global_matrix.index:
+                global_matrix = global_matrix.rename(index={'chronos': 'Chronos'})
+            if 'TFT_Reddit_Y' in global_matrix.index:
+                global_matrix = global_matrix.rename(index={'TFT_Reddit_Y': 'TFT_Reddit'})
+            if 'TFT_reddit_N' in global_matrix.index:
+                global_matrix = global_matrix.rename(index={'TFT_reddit_N': 'TFT_baseline'})
+
+            global_matrix.loc[model_name] = [
+                performance_metrics['MAE'],
+                performance_metrics['MSE'],
+                performance_metrics['RMSE'],
+                float(performance_metrics.get('MAPE', 0.0))
+            ]
+            # Reorder rows
+            desired_order = ['ARIMA', 'TimesFM', 'Chronos', 'TFT_baseline', 'TFT_Reddit']
+            ordered = [i for i in desired_order if i in global_matrix.index]
+            rest = [i for i in global_matrix.index if i not in desired_order]
+            global_matrix = global_matrix.loc[ordered + rest]
+            global_matrix.to_csv(csv_path, index=True)
+        except Exception as e:
+            print(f"⚠️ Error updating global results matrix CSV: {e}")
         
-        # Display updated matrix
+        # Display updated matrix (reordered for consistency)
+        try:
+            desired_order = ['ARIMA', 'TimesFM', 'Chronos', 'TFT_baseline', 'TFT_Reddit']
+            ordered = [i for i in desired_order if i in matrix.index]
+            rest = [i for i in matrix.index if i not in desired_order]
+            matrix = matrix.loc[ordered + rest]
+        except Exception:
+            pass
         print(f"\n📋 Updated Results Matrix:")
         print(matrix)
         

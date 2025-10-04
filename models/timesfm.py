@@ -12,6 +12,9 @@ TimesFM runner module for TSLA stock forecasting.
 import warnings
 import pickle
 from pathlib import Path
+import os
+import time
+import tempfile
 
 import numpy as np
 import pandas as pd
@@ -284,7 +287,7 @@ def _plot_results(df_train: pd.DataFrame, df_test: pd.DataFrame, forecast_df: pd
     plt.show()
 
 
-def _evaluate(df_test: pd.DataFrame, forecast_df: pd.DataFrame) -> tuple[float, float, float] | None:
+def _evaluate(df_test: pd.DataFrame, forecast_df: pd.DataFrame) -> tuple[float, float, float, float] | None:
     if df_test.empty:
         print("No overlapping data for evaluation (no test set).")
         return None
@@ -310,18 +313,22 @@ def _evaluate(df_test: pd.DataFrame, forecast_df: pd.DataFrame) -> tuple[float, 
     mae = float(mean_absolute_error(y_true, y_pred))
     mse = float(mean_squared_error(y_true, y_pred))
     rmse = float(np.sqrt(mse))
+    # Calculate MAPE (Mean Absolute Percentage Error) with zero guard
+    eps = 1e-8
+    mape = float(np.mean(np.abs((y_true - y_pred) / np.clip(np.abs(y_true), eps, None))) * 100.0)
 
     print("Forecast Performance Metrics:")
     print(f"MAE:  {mae:.2f}")
     print(f"MSE:  {mse:.2f}")
     print(f"RMSE: {rmse:.2f}")
-    return mae, mse, rmse
+    print(f"MAPE: {mape:.2f}%")
+    return mae, mse, rmse, mape
 
 
-def _save_results_matrix(ticker: str, metrics: tuple[float, float, float] | None) -> None:
+def _save_results_matrix(ticker: str, metrics: tuple[float, float, float, float] | None) -> None:
     if metrics is None:
         return
-    mae, mse, rmse = metrics
+    mae, mse, rmse, mape = metrics
     # Ensure results dir exists
     results_dir = Path(__file__).resolve().parent.parent / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -333,11 +340,11 @@ def _save_results_matrix(ticker: str, metrics: tuple[float, float, float] | None
             with open(pkl_path, "rb") as f:
                 matrix = pickle.load(f)
         else:
-            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE'])
+            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
     except Exception:
-        matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE'])
+        matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
 
-    matrix.loc['timesfm'] = [mae, mse, rmse]
+    matrix.loc['TimesFM'] = [mae, mse, rmse, mape]
     try:
         with open(pkl_path, "wb") as f:
             pickle.dump(matrix, f)
@@ -350,8 +357,8 @@ def _save_results_matrix(ticker: str, metrics: tuple[float, float, float] | None
         if csv_path.exists():
             global_matrix = pd.read_csv(csv_path, index_col=0)
         else:
-            global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE'])
-        global_matrix.loc['timesfm'] = [mae, mse, rmse]
+            global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE','MAPE'])
+        global_matrix.loc['TimesFM'] = [mae, mse, rmse,mape]
         global_matrix.to_csv(csv_path)
         print("Results saved to matrix successfully!")
         print(global_matrix)

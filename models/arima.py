@@ -287,20 +287,22 @@ def main():
     if has_test_data:
         y_true = df_test['close']
         y_pred = forecast_test_mean
-        
+
         # Calculate metrics
         mae = mean_absolute_error(y_true, y_pred)
         mse = mean_squared_error(y_true, y_pred)
         rmse = np.sqrt(mse)
-        
+        # Calculate MAPE (Mean Absolute Percentage Error)
+        mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+
         print(f"  MAE:  {mae:.2f}")
         print(f"  MSE:  {mse:.2f}")
         print(f"  RMSE: {rmse:.2f}")
-        
+        print(f"  MAPE: {mape:.2f}%")
+
         # 9. Create results matrix
-        matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE'])
-        matrix.loc['ARIMA'] = [mae, mse, rmse]
-        
+        matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+        matrix.loc['ARIMA'] = [mae, mse, rmse, mape]
         print(f"\n📋 Results Matrix:")
         print(matrix)
         
@@ -317,8 +319,12 @@ def main():
             if results_csv.exists():
                 global_matrix = pd.read_csv(results_csv, index_col=0)
             else:
-                global_matrix = pd.DataFrame(columns=["MAE", "MSE", "RMSE"])
-            global_matrix.loc["ARIMA"] = [mae, mse, rmse]
+                global_matrix = pd.DataFrame(columns=["MAE", "MSE", "RMSE", "MAPE"])
+            global_matrix.loc["ARIMA"] = [mae, mse, rmse, mape]
+            desired_order = ['ARIMA', 'TimesFM', 'Chronos', 'TFT_baseline', 'TFT_Reddit']
+            ordered = [i for i in desired_order if i in global_matrix.index]
+            rest = [i for i in global_matrix.index if i not in desired_order]
+            global_matrix = global_matrix.loc[ordered + rest]
             global_matrix.to_csv(results_csv)
             print(f"✓ Global results matrix updated: {results_csv}")
             print("\n📋 Global Results Matrix:")

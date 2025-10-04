@@ -585,20 +585,22 @@ def evaluate_performance(predictions, actuals):
     rmse_metric = MeanSquaredError(squared=False)
     rmse = rmse_metric(predictions_cpu, actuals_cpu).item()
     
-    # Calculate MAPE
-    mape = torch.mean(torch.abs((actuals_cpu - predictions_cpu) / actuals_cpu)) * 100
+    # Calculate MAPE as Python float to avoid tensor prints
+    mape = (torch.abs((actuals_cpu - predictions_cpu) / actuals_cpu)).mean().mul(100).item()
     
     # Create performance summary
     performance_metrics = {
         'Metric': [
             'MAE (Mean Absolute Error)',
             'MSE (Mean Squared Error)',
-            'RMSE (Root Mean Squared Error)'
+            'RMSE (Root Mean Squared Error)',
+            'MAPE (Mean Absolute Percentage Error)'
         ],
         'Value': [
             f'{mae:.4f}',
             f'{mse:.4f}',
-            f'{rmse:.4f}'
+            f'{rmse:.4f}',
+            f'{mape:.4f}'
         ]
     }
     
@@ -827,7 +829,9 @@ def save_results_and_update_matrix(performance_metrics, config):
         'learning_rate': config['learning_rate'],
         'mae': performance_metrics['mae'],
         'mse': performance_metrics['mse'],
-        'rmse': performance_metrics['rmse']
+        'rmse': performance_metrics['rmse'],
+        'mape': performance_metrics['mape']
+        
     }
     
    # Prepare results directory under project root
@@ -855,14 +859,15 @@ def save_results_and_update_matrix(performance_metrics, config):
     except FileNotFoundError:
         print("⚠️  No existing results matrix found. Creating new one...")
         # Create new matrix if none exists
-        matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE'])
+        matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
 
-    # Add TFT model results
+    # Add TFT model results (standardized key)
     print("\nAdding TFT model results...")
-    matrix.loc["TFT_reddit_N"] = [
+    matrix.loc["TFT_baseline"] = [
         performance_metrics['mae'], 
         performance_metrics['mse'], 
-        performance_metrics['rmse']
+        performance_metrics['rmse'],
+        performance_metrics['mape']
     ]
     
     print("\nUpdated matrix:")
@@ -871,13 +876,34 @@ def save_results_and_update_matrix(performance_metrics, config):
     # Save updated matrix
     with open(os.path.join(results_dir, "TSLA_results_matrix.pkl"), "wb") as f:
         pickle.dump(matrix, f)
-    # Also save as CSV for easy viewing
-    matrix.to_csv(os.path.join(results_dir, "result_matrix.csv"), index=True)
+    # Also save as CSV (reordered rows)
+    csv_path = os.path.join(results_dir, "result_matrix.csv")
+    try:
+        if os.path.exists(csv_path):
+            global_matrix = pd.read_csv(csv_path, index_col=0)
+        else:
+            global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+        if 'MAPE' not in global_matrix.columns:
+            global_matrix = global_matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+        global_matrix.loc['TFT_baseline'] = [
+            performance_metrics['mae'],
+            performance_metrics['mse'],
+            performance_metrics['rmse'],
+            performance_metrics['mape']
+        ]
+        desired_order = ['ARIMA', 'TimesFM', 'Chronos', 'TFT_baseline', 'TFT_Reddit']
+        ordered = [i for i in desired_order if i in global_matrix.index]
+        rest = [i for i in global_matrix.index if i not in desired_order]
+        global_matrix = global_matrix.loc[ordered + rest]
+        global_matrix.to_csv(csv_path)
+    except Exception as e:
+        print(f"⚠️ Failed to update global results matrix CSV: {e}")
     
     print("\nTFT analysis complete.")
     print(f"📊 Model trained on {config['training_days']} days of data")
     print(f"🔮 Predictions made for {config['prediction_days']} days ahead")
     print(f"📈 Best RMSE: {performance_metrics['rmse']:.4f}")
+
 
 # =============================================================================
 # Main Execution
