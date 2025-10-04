@@ -81,18 +81,30 @@ The period can be daily, hourly, etc. Some sources also provide Adjusted Close (
 
 ## Top Results
 
-Best overall RMSE on **TSLA** (lower is better), parsed from `results/result_matrix.csv`:
+Aggregate results on **TSLA** (lower is better), from `results/result_matrix.csv`:
 
-| Model            |   MAE |    MSE |  RMSE |
-|------------------|------:|-------:|------:|
-| ARIMA            | 18.95 | 371.01 | 19.26 |
-| timesfm          | 23.23 | 583.64 | 24.16 |
-| chronos          | 17.68 | 332.02 | 18.22 |
-| TFT_reddit_N     | 10.49 | 117.57 | 10.84 |
-| **TFT_Reddit_Y** | **3.77** | **20.81** | **4.56** |
+| Model         |    MAE |     MSE |   RMSE |  MAPE |
+|---------------|-------:|--------:|-------:|------:|
+| ARIMA         |  18.95 |  371.01 |  19.26 |  6.04 |
+| TimesFM       |  23.23 |  583.64 |  24.16 |  7.39 |
+| Chronos       |  17.68 |  332.02 |  18.22 |  5.58 |
+| TFT_baseline  |  10.49 |  117.57 |  10.84 |  3.33 |
+| **TFT_Reddit**|  **4.40** |  **20.19** |  **4.49** |  **1.39** |
 
-- Winner: **TFT_Reddit_Y** (TFT + Reddit sentiment & spike features) with RMSE ≈ 4.56.
-- Metrics are computed on the forecast horizon produced by each notebook runner.
+- Winner: **TFT_Reddit** (TFT + Reddit sentiment & spike features) with RMSE ≈ 4.49 and MAPE ≈ 1.39%.
+- Metrics are computed on each model runner’s forecast horizon.
+
+### Execution Time (seconds)
+
+Parsed from `results/TSLA_execution_time_matrix.csv` (lower is faster; values vary by run/hardware):
+
+| Model                   |  Time (s) |
+|-------------------------|----------:|
+| ARIMA                   |      6.86 |
+| TimesFM                 |     20.48 |
+| Chronos                 |      9.72 |
+| TFT_baseline            |     33.81 |
+| TFT_with_Reddit_Sentiment |     66.98 |
 
 ## Results Visualizations
 
@@ -122,7 +134,7 @@ Best overall RMSE on **TSLA** (lower is better), parsed from `results/result_mat
 <tr>
 <td align="center" width="50%">
 <img src="results/TSLA_TFT_with_reddit_sentiment_forecast.png" width="375">
-<br><b>TFT with Reddit Sentiment</b><br>RMSE: 4.56 ⭐
+<br><b>TFT with Reddit Sentiment</b><br>RMSE: 4.49 ⭐
 </td>
 <td align="center" width="50%">
 </td>
