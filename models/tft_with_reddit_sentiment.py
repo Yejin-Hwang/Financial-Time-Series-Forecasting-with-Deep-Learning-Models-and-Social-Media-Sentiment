@@ -335,6 +335,10 @@ def create_tft_dataset(df, config):
     time_varying_unknown_reals = [
         "close", "volume", "rolling_volatility"
     ]
+    if 'volume_norm' in df.columns:
+        time_varying_unknown_reals = [
+            "close", "volume_norm", "rolling_volatility"
+        ]
     
     # Filter out features that don't exist in the dataset
     available_features = df.columns.tolist()
@@ -904,7 +908,10 @@ def main():
     
     # Load and prepare data
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    data_path = os.path.join(project_root, "data", "processed", "tsla_price_sentiment_spike.csv")
+    # Prefer normalized dataset if available
+    norm_path = os.path.join(project_root, "data", "processed", "tsla_price_sentiment_spike_norm.csv")
+    raw_path = os.path.join(project_root, "data", "processed", "tsla_price_sentiment_spike.csv")
+    data_path = norm_path if os.path.exists(norm_path) else raw_path
     df = load_and_prepare_data(data_path, config)
     if df is None:
         print("❌ Failed to load data. Exiting.")

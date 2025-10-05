@@ -133,7 +133,9 @@ def load_and_prepare_data(file_path=None, config=None):
         if file_path is None:
             project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             processed_dir = os.path.join(project_root, 'data', 'processed')
+            # Prefer normalized dataset if available
             candidates = [
+                os.path.join(processed_dir, 'tsla_price_sentiment_spike_norm.csv'),
                 os.path.join(processed_dir, 'tsla_price_sentiment_spike.csv'),
                 os.path.join(processed_dir, 'tsla_sentiment_spike.csv'),
                 os.path.join(processed_dir, 'TSLA_full_features.csv'),
@@ -373,7 +375,10 @@ def create_tft_dataset(df, config):
         "is_month_end", "is_month_start", "days_since_earning", "rolling_volatility"
     ]
     
+    # Prefer normalized volume if available
     time_varying_unknown_reals = ["close", "volume"]
+    if "volume_norm" in df.columns:
+        time_varying_unknown_reals = ["close", "volume_norm"]
     
     # Filter out features that don't exist in the dataset
     available_features = df.columns.tolist()
