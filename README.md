@@ -193,6 +193,19 @@ The Temporal Fusion Transformer (TFT) model provides rich interpretability throu
 ![TSLA Activity Timing Spike Detection](results/TSLA_activity_timing_spike_price.png)
 *Reddit activity spike detection mapped to TSLA price movements*
 
+## Volume Normalization Experiment (TFT inputs)
+
+We added a log1p(volume) + RobustScaler (fit on the 96-day train window starting 2025-02-01) and used `volume_norm` in TFT runners. Only TFT consumes volume in this project; other models remain univariate on close.
+
+| Model        | RMSE (before) | RMSE (after) | MAPE (before) | MAPE (after) |
+|--------------|---------------:|-------------:|--------------:|-------------:|
+| TFT_baseline |         10.84  |       10.84  |         3.33  |        3.33  |
+| TFT_Reddit   |          4.56  |        4.49  |         1.39  |        0.93  |
+
+- before: `data/processed/tsla_price_sentiment_spike.csv`
+- after: `data/processed/tsla_price_sentiment_spike_norm.csv` (preferred if present)
+- seed=42, other hyperparameters unchanged.
+
 ## Project structure
 
 ```
