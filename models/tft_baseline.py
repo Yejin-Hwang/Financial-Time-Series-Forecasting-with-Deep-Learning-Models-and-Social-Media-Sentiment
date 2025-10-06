@@ -959,6 +959,7 @@ def main():
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     processed_dir = os.path.join(project_root, 'data', 'processed')
     candidates = [
+        os.path.join(processed_dir, 'tsla_price_sentiment_spike_norm.csv'),
         os.path.join(processed_dir, 'tsla_price_sentiment_spike.csv'),
         os.path.join(processed_dir, 'TSLA_full_features.csv'),
         os.path.join(project_root, 'data', 'TSLA_close.csv')
