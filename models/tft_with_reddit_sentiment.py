@@ -322,7 +322,7 @@ def create_tft_dataset(df, config):
     # Define time-varying features (engineered sentiment/spike features as known; target/price as unknown)
     time_varying_known_reals = [
         "time_idx", "month", "day_of_week", "quarter", "year", 
-        "is_month_end", "is_month_start", "days_since_earning",
+        "is_month_end", "is_month_start", "days_since_earning", "rolling_volatility"
         # Sentiment lags and aggregates
         "daily_sentiment_lag1", "daily_sentiment_lag2", "daily_sentiment_lag3", "daily_sentiment_lag4", "daily_sentiment_lag5",
         "daily_sentiment_mean_3", "daily_sentiment_mean_7", "daily_sentiment_mean_14",
@@ -333,7 +333,7 @@ def create_tft_dataset(df, config):
     ]
     
     time_varying_unknown_reals = [
-        "close", "volume", "rolling_volatility"
+        "close", "volume"
     ]
     if 'volume_norm' in df.columns:
         time_varying_unknown_reals = [
