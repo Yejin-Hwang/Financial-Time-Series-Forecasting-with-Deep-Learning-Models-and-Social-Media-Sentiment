@@ -134,7 +134,7 @@ Parsed from `results/TSLA_execution_time_matrix.csv` (lower is faster; values va
 <tr>
 <td align="center" width="50%">
 <img src="results/TSLA_TFT_with_reddit_sentiment_forecast_2.png" width="375">
-<br><b>TFT with Reddit Sentiment</b><br>RMSE: 4.49 ⭐
+<br><b>TFT with Reddit Sentiment</b><br>RMSE: 3.33 ⭐
 </td>
 <td align="center" width="50%">
 </td>
