@@ -2,7 +2,7 @@
 # coding: utf-8
 
 """
-Chronos runner module for TSLA stock forecasting.
+Chronos runner module for NVDA stock forecasting.
 - Importable without side effects
 - Exposes main() to run the full pipeline
 - Lazy-imports Chronos to avoid kernel crashes
@@ -22,25 +22,16 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 warnings.filterwarnings('ignore')
 
 
-def _resolve_tsla_csv_path() -> str:
+def _resolve_nvda_csv_path() -> str:
     base_dir = Path(__file__).resolve().parent.parent
-    candidates = [
-        base_dir / 'data' / 'processed' / 'tsla_price_sentiment_spike.csv',
-        base_dir / 'data' / 'processed' / 'TSLA_full_features.csv',
-        Path('TSLA_close.csv'),
-        base_dir / 'data' / 'TSLA_close.csv',
-        base_dir / 'data' / 'raw' / 'TSLA_close.csv',
-        Path.cwd() / 'data' / 'TSLA_close.csv',
-    ]
-    for p in candidates:
-        if p.exists():
-            return str(p)
-    searched = "\n    ".join(str(p) for p in candidates)
-    raise FileNotFoundError(f"Can't find TSLA_close.csv. Searched:\n    {searched}")
+    target = base_dir / 'data' / 'NVDA_close.csv'
+    if target.exists():
+        return str(target)
+    raise FileNotFoundError(f"Can't find required file: {target}")
 
 
-def _load_data(ticker: str = 'TSLA') -> pd.DataFrame:
-    df = pd.read_csv(_resolve_tsla_csv_path())
+def _load_data(ticker: str = 'NVDA') -> pd.DataFrame:
+    df = pd.read_csv(_resolve_nvda_csv_path())
     if 'date' not in df or 'close' not in df:
         raise ValueError("CSV must contain 'date' and 'close' columns")
     df['date'] = pd.to_datetime(df['date'])
@@ -140,7 +131,7 @@ def _plot(df_train: pd.DataFrame, df_test: pd.DataFrame, median: np.ndarray, low
 
 
 def main(
-    ticker: str = 'TSLA',
+    ticker: str = 'NVDA',
     train_start: Optional[str] = None,
     context_len: int = 96,
     test_days: int = 5,
@@ -225,8 +216,8 @@ def main(
         except Exception as e:
             print(f'Failed to save per-ticker matrix: {e}')
 
-        # Global CSV
-        csv_path = results_dir / 'result_matrix.csv'
+        # NVDA CSV (separate file)
+        csv_path = results_dir / 'result_matrix_nvda.csv'
         try:
             if csv_path.exists():
                 global_matrix = pd.read_csv(csv_path, index_col=0)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Fixed ARIMA Model for Predicting Tesla Stock Price
+Fixed ARIMA Model for Predicting Nvidia (NVDA) Stock Price
 Author: yejin
 Fixed version addressing the main issues in the original notebook
 """
@@ -24,30 +24,21 @@ from .deps import (
 
 warnings.filterwarnings("ignore")
 
-def _resolve_tsla_csv_path() -> str:
-    """Resolve path to TSLA_close.csv across common project locations."""
+def _resolve_nvda_csv_path() -> str:
+    """Resolve path to NVDA_close.csv under data/ exactly as required."""
     base_dir = Path(__file__).resolve().parent.parent  # project root
-    candidates = [
-        base_dir / "data" / "processed" / "tsla_price_sentiment_spike_norm.csv",
-        base_dir / "data" / "processed" / "TSLA_full_features.csv",
-        Path("TSLA_close.csv"),
-        base_dir / "data" / "TSLA_close.csv",
-        base_dir / "data" / "raw" / "TSLA_close.csv",
-        Path.cwd() / "data" / "TSLA_close.csv",
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            return str(candidate)
-    searched = "\n    ".join(str(p) for p in candidates)
-    raise FileNotFoundError(f"Can't find TSLA_close.csv. Searched:\n    {searched}")
+    target = base_dir / "data" / "NVDA_close.csv"
+    if target.exists():
+        return str(target)
+    raise FileNotFoundError(f"Can't find required file: {target}")
 
 def get_user_input():
     """Get user input for training period and prediction days"""
-    print("=== ARIMA Model Configuration ===\n")
+    print("=== ARIMA Model Configuration (NVDA) ===\n")
     
     # Get available date range
     try:
-        df_path = _resolve_tsla_csv_path()
+        df_path = _resolve_nvda_csv_path()
         df = pd.read_csv(df_path)
         df["date"] = pd.to_datetime(df["date"])
         min_date = df["date"].min()
@@ -55,7 +46,7 @@ def get_user_input():
         print(f"📅 Available data range: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')}")
         print(f"📊 Total data points: {len(df)}")
     except FileNotFoundError:
-        print("✗ Error: can't find TSLA_close.csv file.")
+        print("✗ Error: can't find NVDA_close.csv file.")
         return None, None, None
     
     # Get training start date
@@ -131,10 +122,10 @@ def main():
     _random.seed(42)
     _np.random.seed(42)
 
-    print("=== ARIMA Model for Tesla Stock Price Prediction ===\n")
+    print("=== ARIMA Model for Nvidia (NVDA) Stock Price Prediction ===\n")
     
     # Ensure ticker is defined even when there is no test data
-    ticker = "TSLA"
+    ticker = "NVDA"
     # Ensure results directory exists under project root
     results_dir = Path(__file__).resolve().parent.parent / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -313,14 +304,14 @@ def main():
         print(matrix)
         
         # 10. Save results
-        ticker = "TSLA"
+        ticker = "NVDA"
         results_pkl = results_dir / f"{ticker}_results_matrix.pkl"
         with open(results_pkl, "wb") as f:
             pickle.dump(matrix, f)
         print(f"\n💾 Results saved to {results_pkl}")
 
-        # Also update the global CSV matrix (results/result_matrix.csv) so it's easy to view
-        results_csv = results_dir / "result_matrix.csv"
+        # Also update the NVDA CSV matrix so it's easy to view
+        results_csv = results_dir / "result_matrix_nvda.csv"
         try:
             if results_csv.exists():
                 global_matrix = pd.read_csv(results_csv, index_col=0)

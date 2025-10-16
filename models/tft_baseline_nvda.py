@@ -3,7 +3,8 @@
 """
 Automated TFT (Temporal Fusion Transformer) Stock Price Forecasting
 
-ㅡ
+This script provides a clean, automated implementation of TFT for stock price prediction.
+
 Features:
 - User-configurable training period (default: 90 days)
 - 5-day prediction horizon
@@ -132,15 +133,9 @@ def load_and_prepare_data(file_path=None, config=None):
         if file_path is None:
             project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             processed_dir = os.path.join(project_root, 'data', 'processed')
-            # Prefer normalized dataset if available
-            candidates = [
-                os.path.join(processed_dir, 'tsla_price_sentiment_spike_norm.csv'),
-                os.path.join(processed_dir, 'tsla_price_sentiment_spike.csv'),
-                os.path.join(processed_dir, 'tsla_sentiment_spike.csv'),
-                os.path.join(processed_dir, 'TSLA_full_features.csv'),
-                os.path.join(project_root, 'data', 'TSLA_close.csv')
-            ]
-            file_path = next((p for p in candidates if os.path.exists(p)), candidates[0])
+            file_path = os.path.join(processed_dir, 'NVDA_full_features.csv')
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"Required file not found: {file_path}")
 
         # Load data
         df = pd.read_csv(file_path)
@@ -206,7 +201,7 @@ def load_and_prepare_data(file_path=None, config=None):
         
         # Ensure unique_id exists
         if 'unique_id' not in df.columns:
-            df['unique_id'] = 'TSLA'
+            df['unique_id'] = 'NVDA'
             print("✓ unique_id column created")
         
         # Filter data by date range if specified
@@ -762,7 +757,7 @@ def create_standalone_plot(predictions, actuals, config, df=None):
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     results_dir = os.path.join(project_root, 'results')
     os.makedirs(results_dir, exist_ok=True)
-    plot_path = os.path.join(results_dir, 'TSLA_TFT_baseline_forecast.png')
+    plot_path = os.path.join(results_dir, 'NVDA_TFT_baseline_forecast.png')
     try:
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         print(f"Plot saved to {plot_path}")
@@ -855,7 +850,7 @@ def save_results_and_update_matrix(performance_metrics, config):
     
     # Load existing results matrix
     try:
-        with open(os.path.join(results_dir, "TSLA_results_matrix.pkl"), "rb") as f:
+        with open(os.path.join(results_dir, "NVDA_results_matrix.pkl"), "rb") as f:
             matrix = pickle.load(f)
         print("✓ Loaded existing results matrix")
         print("\nCurrent matrix:")
@@ -878,10 +873,10 @@ def save_results_and_update_matrix(performance_metrics, config):
     print(matrix)
     
     # Save updated matrix
-    with open(os.path.join(results_dir, "TSLA_results_matrix.pkl"), "wb") as f:
+    with open(os.path.join(results_dir, "NVDA_results_matrix.pkl"), "wb") as f:
         pickle.dump(matrix, f)
     # Also save as CSV (reordered rows)
-    csv_path = os.path.join(results_dir, "result_matrix.csv")
+    csv_path = os.path.join(results_dir, "result_matrix_nvda.csv")
     try:
         if os.path.exists(csv_path):
             global_matrix = pd.read_csv(csv_path, index_col=0)
@@ -957,13 +952,7 @@ def main():
     # Build dataset path from project root and load data
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     processed_dir = os.path.join(project_root, 'data', 'processed')
-    candidates = [
-        os.path.join(processed_dir, 'tsla_price_sentiment_spike_norm.csv'),
-        os.path.join(processed_dir, 'tsla_price_sentiment_spike.csv'),
-        os.path.join(processed_dir, 'TSLA_full_features.csv'),
-        os.path.join(project_root, 'data', 'TSLA_close.csv')
-    ]
-    data_path = next((p for p in candidates if os.path.exists(p)), candidates[0])
+    data_path = os.path.join(processed_dir, 'NVDA_full_features.csv')
     print(f"Using data file: {data_path}")
     df = load_and_prepare_data(file_path=data_path, config=config)
     print("\nFirst few rows:")

@@ -2,7 +2,7 @@
 # coding: utf-8
 
 """
-TimesFM runner module for TSLA stock forecasting.
+TimesFM runner module for NVDA stock forecasting.
 - Importable without side effects
 - Exposes main() to run the full pipeline
 - Uses minimal direct imports to avoid heavy dependencies that can crash kernels
@@ -44,7 +44,7 @@ def get_user_input() -> tuple[str, int]:
 
     # Show available range
     try:
-        df = _load_data("TSLA")
+        df = _load_data("NVDA")
     except Exception as e:
         print(f"✗ Error while reading data: {e}")
         # Sensible fallbacks
@@ -93,26 +93,17 @@ def get_user_input() -> tuple[str, int]:
     return train_start, test_days
 
 
-def _resolve_tsla_csv_path() -> str:
-    """Resolve path to TSLA_close.csv across common project locations."""
-    base_dir = Path(__file__).resolve().parent.parent  # project root
-    candidates = [
-        base_dir / "data" / "processed" / "tsla_price_sentiment_spike.csv",
-        base_dir / "data" / "processed" / "TSLA_full_features.csv",
-        Path("TSLA_close.csv"),
-        base_dir / "data" / "TSLA_close.csv",
-        base_dir / "data" / "raw" / "TSLA_close.csv",
-        Path.cwd() / "data" / "TSLA_close.csv",
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            return str(candidate)
-    searched = "\n    ".join(str(p) for p in candidates)
-    raise FileNotFoundError(f"Can't find TSLA_close.csv. Searched:\n    {searched}")
+def _resolve_nvda_csv_path() -> str:
+    """Resolve path to data/NVDA_close.csv (strict)."""
+    base_dir = Path(__file__).resolve().parent.parent
+    target = base_dir / "data" / "NVDA_close.csv"
+    if target.exists():
+        return str(target)
+    raise FileNotFoundError(f"Can't find required file: {target}")
 
 
-def _load_data(ticker: str = "TSLA") -> pd.DataFrame:
-    df_path = _resolve_tsla_csv_path()
+def _load_data(ticker: str = "NVDA") -> pd.DataFrame:
+    df_path = _resolve_nvda_csv_path()
     df = pd.read_csv(df_path)
     if "date" not in df.columns:
         raise ValueError("CSV must contain a 'date' column")
@@ -141,17 +132,26 @@ def _split_train_test(
     if context_len % 32 != 0:
         context_len = max(32, (context_len // 32) * 32)
 
+    total = len(df_sorted)
+
     if train_start is not None:
         start_dt = pd.to_datetime(train_start)
         start_idx_series = df_sorted.index[df_sorted['date'] >= start_dt]
-        start_idx = int(start_idx_series[0]) if len(start_idx_series) > 0 else 0
+        start_idx = int(start_idx_series[0]) if len(start_idx_series) > 0 else total
     else:
         # default: take last context_len + test_days rows
-        total = len(df_sorted)
         start_idx = max(0, total - (context_len + max(test_days, 0)))
 
-    train_slice = df_sorted.iloc[start_idx: start_idx + context_len]
-    test_slice = df_sorted.iloc[start_idx + len(train_slice): start_idx + len(train_slice) + max(test_days, 0)]
+    # Reserve space for test_days when possible
+    max_train_end = max(0, total - max(test_days, 0))
+    if start_idx > max_train_end:
+        # Shift start back to keep room for the test window
+        start_idx = max(0, max_train_end - context_len)
+
+    end_train_idx = min(start_idx + context_len, max_train_end)
+
+    train_slice = df_sorted.iloc[start_idx:end_train_idx]
+    test_slice = df_sorted.iloc[end_train_idx:end_train_idx + max(test_days, 0)]
 
     return train_slice.reset_index(drop=True), test_slice.reset_index(drop=True)
 
@@ -351,8 +351,8 @@ def _save_results_matrix(ticker: str, metrics: tuple[float, float, float, float]
     except Exception as e:
         print(f"Failed to save per-ticker matrix: {e}")
 
-    # Global CSV summary (shared across models)
-    csv_path = results_dir / "result_matrix.csv"
+    # NVDA CSV summary (separate file)
+    csv_path = results_dir / "result_matrix_nvda.csv"
     try:
         if csv_path.exists():
             global_matrix = pd.read_csv(csv_path, index_col=0)
@@ -366,7 +366,7 @@ def _save_results_matrix(ticker: str, metrics: tuple[float, float, float, float]
         print(f"Failed to update global results matrix: {e}")
 
 
-def main(ticker: str = "TSLA", test_days: int = 5,
+def main(ticker: str = "NVDA", test_days: int = 5,
          train_start: str | None = None, train_end: str | None = None,
          use_model: bool = False, interactive: bool = False,
          backend: str = "cpu", per_core_batch_size: int = 1,

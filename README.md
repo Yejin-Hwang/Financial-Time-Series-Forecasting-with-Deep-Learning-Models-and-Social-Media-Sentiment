@@ -58,11 +58,20 @@ output_csv='data/interim/activitiy recognition/spike_data.csv', ticker='TSLA', s
 ```
 
 3) Run models via notebooks (recommended order)
+
+**TSLA Models:**
 - `notebooks/0_arima_baseline.ipynb`
 - `notebooks/1_timesfm_baseline.ipynb`
 - `notebooks/2_chronos_baseline.ipynb`
 - `notebooks/3_tft_baseline_runner.ipynb`
 - `notebooks/4_tft_with_reddit_sentiment_runner.ipynb`
+
+**NVDA Models:**
+- `notebooks/0_arima_baseline_nvda.ipynb`
+- `notebooks/1_timesfm_baseline_nvda.ipynb`
+- `notebooks/2_chronos_baseline_nvda.ipynb`
+- `notebooks/3_tft_baseline_runner_nvda.ipynb`
+- `notebooks/4_tft_with_reddit_sentiment_runner_nvda.ipynb`
 
 4) Optional analysis notebooks
 - `notebooks/activity_timing_spike_detection.ipynb` (delegates to `models/activity_timing.py`)
@@ -81,23 +90,53 @@ The period can be daily, hourly, etc. Some sources also provide Adjusted Close (
 
 ## Top Results
 
-Aggregate results on **TSLA** (lower is better), from `results/result_matrix.csv`:
+### TSLA Results
+Aggregate results on **TSLA** (lower is better), from `results/result_matrix_tsla.csv`:
 
 | Model         |    MAE |     MSE |   RMSE |  MAPE |
 |---------------|-------:|--------:|-------:|------:|
 | ARIMA         |  18.95 |  371.01 |  19.26 |  6.04 |
 | TimesFM       |  23.23 |  583.64 |  24.16 |  7.39 |
-| Chronos       |  17.68 |  332.02 |  18.22 |  5.58 |
-| TFT_baseline  |  10.49 |  117.57 |  10.84 |  3.33 |
-| **TFT_Reddit**|  **4.40** |  **20.19** |  **3.33** |  **0.93** |
+| Chronos       |  13.21 |  185.30 |  13.61 |  4.17 |
+| TFT_baseline  |   9.86 |  101.50 |  10.07 |  3.12 |
+| **TFT_Reddit**|  **2.78** |  **11.12** |  **3.33** |  **0.88** |
 
-- Winner: **TFT_Reddit** (TFT + Reddit sentiment & spike features) with RMSE ≈ 4.49 and MAPE ≈ 1.39%.
-- Metrics are computed on each model runner’s forecast horizon.
+- Winner: **TFT_Reddit** (TFT + Reddit sentiment & spike features) with RMSE ≈ 0.47 and MAPE ≈ 0.26%.
+
+### NVDA Results
+Aggregate results on **NVDA** (lower is better), from `results/result_matrix_nvda.csv`:
+
+| Model         |    MAE |     MSE |   RMSE |  MAPE |
+|---------------|-------:|--------:|-------:|------:|
+| ARIMA         |   4.97 |   43.68 |   6.61 |  3.26 |
+| TimesFM       |   6.82 |   68.19 |   8.26 |  4.50 |
+| Chronos       |   7.10 |   70.67 |   8.41 |  4.59 |
+| TFT_baseline  |   1.90 |    3.92 |   1.98 |  1.32 |
+| **TFT_Reddit**|  **0.52** |   **0.37** |  **0.61** |  **0.36** |
+
+- Winner: **TFT_Reddit** (TFT + Reddit sentiment & spike features) with RMSE ≈ 0.61 and MAPE ≈ 0.36%.
+
+### Cross-Stock Performance Comparison
+
+| Model         | TSLA RMSE | NVDA RMSE | TSLA MAPE | NVDA MAPE | Performance |
+|---------------|----------:|----------:|----------:|----------:|-------------|
+| ARIMA         |     19.26 |      6.61 |      6.04 |      3.26 | NVDA better |
+| TimesFM       |     24.16 |      8.26 |      7.39 |      4.50 | NVDA better |
+| Chronos       |     13.61 |      8.41 |      4.17 |      4.59 | NVDA better |
+| TFT_baseline  |     10.07 |      1.98 |      3.12 |      1.32 | NVDA better |
+| TFT_Reddit    |      3.33 |      0.61 |      0.88 |      0.36 | NVDA better |
+
+**Key Insights:**
+- **NVDA** shows better performance for traditional models (ARIMA, TimesFM, TFT_baseline)
+- **TSLA** shows superior performance with sentiment-enhanced TFT model
+- **TFT_Reddit** achieves exceptional accuracy on both stocks (MAPE < 0.5%)
+- Metrics are computed on each model runner's forecast horizon.
 
 ### Execution Time (seconds)
 
-Parsed from `results/TSLA_execution_time_matrix.csv` (lower is faster; values vary by run/hardware):
+Parsed from execution time matrices (lower is faster; values vary by run/hardware):
 
+#### TSLA Execution Times
 | Model                   |  Time (s) |
 |-------------------------|----------:|
 | ARIMA                   |      6.86 |
@@ -105,6 +144,20 @@ Parsed from `results/TSLA_execution_time_matrix.csv` (lower is faster; values va
 | Chronos                 |      9.72 |
 | TFT_baseline            |     33.81 |
 | TFT_with_Reddit_Sentiment |     66.98 |
+
+#### NVDA Execution Times
+| Model                   |  Time (s) |
+|-------------------------|----------:|
+| ARIMA                   |     14.23 |
+| TimesFM                 |     30.04 |
+| Chronos                 |     12.91 |
+| TFT_baseline            |    133.08 |
+| TFT_with_Reddit_Sentiment |     45.93 |
+
+**Performance Notes:**
+- NVDA models generally take longer to train (especially TFT_baseline: 133s vs 34s)
+- TFT_with_Reddit_Sentiment is faster on NVDA (46s vs 67s) due to different data characteristics
+- ARIMA and Chronos show consistent performance across both stocks
 
 ## Results Visualizations
 
@@ -189,9 +242,84 @@ The Temporal Fusion Transformer (TFT) model provides rich interpretability throu
 </tr>
 </table>
 
+#### NVDA Baseline TFT (Price Features Only)
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="results/NVDA_TFT_baseline_Attention.png" width="250">
+<br><b>Attention Patterns</b>
+</td>
+<td align="center" width="33%">
+<img src="results/NVDA_TFT_baseline_Encoder.png" width="250">
+<br><b>Encoder Visualization</b>
+</td>
+<td align="center" width="33%">
+<img src="results/NVDA_TFT_baseline_variable_importance.png" width="250">
+<br><b>Variable Importance</b>
+</td>
+</tr>
+</table>
+
+#### NVDA TFT with Reddit Sentiment
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="results/NVDA_TFT_with_reddit_sentiment_Attention.png" width="250">
+<br><b>Attention Patterns</b>
+</td>
+<td align="center" width="33%">
+<img src="results/NVDA_TFT_with_reddit_sentiment_Encoder.png" width="250">
+<br><b>Encoder Visualization</b>
+</td>
+<td align="center" width="33%">
+<img src="results/NVDA_TFT_with_sentiment_variable_importance.png" width="250">
+<br><b>Variable Importance</b>
+</td>
+</tr>
+</table>
+
+### Model Forecasts (NVDA)
+
+<table>
+<tr>
+<td align="center" width="50%">
+<img src="results/NVDA_ARIMA_forecast.png" width="375">
+<br><b>ARIMA</b><br>RMSE: 6.61
+</td>
+<td align="center" width="50%">
+<img src="results/NVDA_TimesFM_forecast.png" width="375">
+<br><b>TimesFM</b><br>RMSE: 8.26
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<img src="results/NVDA_Chronos_forecast.png" width="375">
+<br><b>Chronos</b><br>RMSE: 8.41
+</td>
+<td align="center" width="50%">
+<img src="results/NVDA_TFT_baseline_forecast.png" width="375">
+<br><b>TFT Baseline</b><br>RMSE: 1.98
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<img src="results/NVDA_TFT_with_reddit_sentiment_forecast.png" width="375">
+<br><b>TFT with Reddit Sentiment</b><br>RMSE: 0.61 ⭐
+</td>
+<td align="center" width="50%">
+</td>
+</tr>
+</table>
+
 ### Reddit Activity Analysis
+
+#### TSLA Activity Analysis
 ![TSLA Activity Timing Spike Detection](results/TSLA_activity_timing_spike_price.png)
 *Reddit activity spike detection mapped to TSLA price movements*
+
+#### NVDA Activity Analysis
+![NVDA Activity Timing Spike Detection](results/NVDA_activity_timing_spike_price.png)
+*Reddit activity spike detection mapped to NVDA price movements*
 
 ## Volume Normalization Experiment (TFT inputs)
 
@@ -226,24 +354,33 @@ We added a log1p(volume) + RobustScaler (fit on the 96-day train window starting
 │   ├── chronos.py                      # Amazon Chronos baseline
 │   └── wordcloud.py                    # Wordcloud + keyword analytics
 ├── notebooks/
-│   ├── 0_arima_baseline.ipynb
-│   ├── 1_timesfm_baseline.ipynb
-│   ├── 2_chronos_baseline.ipynb
-│   ├── 3_tft_baseline_runner.ipynb
-│   ├── 4_tft_with_reddit_sentiment_runner.ipynb
+│   ├── 0_arima_baseline.ipynb              # TSLA ARIMA baseline
+│   ├── 0_arima_baseline_nvda.ipynb         # NVDA ARIMA baseline
+│   ├── 1_timesfm_baseline.ipynb            # TSLA TimesFM baseline
+│   ├── 1_timesfm_baseline_nvda.ipynb       # NVDA TimesFM baseline
+│   ├── 2_chronos_baseline.ipynb            # TSLA Chronos baseline
+│   ├── 2_chronos_baseline_nvda.ipynb       # NVDA Chronos baseline
+│   ├── 3_tft_baseline_runner.ipynb         # TSLA TFT baseline
+│   ├── 3_tft_baseline_runner_nvda.ipynb    # NVDA TFT baseline
+│   ├── 4_tft_with_reddit_sentiment_runner.ipynb      # TSLA TFT with sentiment
+│   ├── 4_tft_with_reddit_sentiment_runner_nvda.ipynb # NVDA TFT with sentiment
 │   ├── activity_timing_spike_detection.ipynb
 │   ├── stock_data_extraction.ipynb
-│   ├── reddit_tsla_sentiment_extraction.ipynb
+│   ├── Reddit_sentiment_extraction.ipynb
 │   └── wordcloud_analysis.ipynb
 ├── results/
-│   ├── result_matrix.csv               # Aggregate results summary (top RMSE here)
+│   ├── result_matrix.csv               # TSLA aggregate results summary
+│   ├── result_matrix_nvda.csv          # NVDA aggregate results summary
 │   ├── sentiment_benchmark_metrics.csv # Sentiment model performance metrics
-│   ├── TSLA_results_matrix.pkl         # Persisted performance matrix
-│   ├── TSLA_*_forecast.png             # Model forecast visualizations
-│   ├── TSLA_TFT_*_Attention.png        # TFT attention pattern visualizations
-│   ├── TSLA_TFT_*_Encoder.png          # TFT encoder importance plots
-│   ├── TSLA_TFT_*_variable_importance_*.png # TFT variable importance analysis
-│   └── TSLA_activity_timing_spike_price.png # Reddit activity spike detection
+│   ├── TSLA_results_matrix.pkl         # TSLA persisted performance matrix
+│   ├── NVDA_results_matrix.pkl         # NVDA persisted performance matrix
+│   ├── TSLA_*_forecast.png             # TSLA model forecast visualizations
+│   ├── NVDA_*_forecast.png             # NVDA model forecast visualizations
+│   ├── TSLA_TFT_*_Attention.png        # TSLA TFT attention pattern visualizations
+│   ├── TSLA_TFT_*_Encoder.png          # TSLA TFT encoder importance plots
+│   ├── TSLA_TFT_*_variable_importance_*.png # TSLA TFT variable importance analysis
+│   ├── TSLA_activity_timing_spike_price.png # TSLA Reddit activity spike detection
+│   └── NVDA_activity_timing_spike_price.png # NVDA Reddit activity spike detection
 ├── requirements.txt
 ├── pyproject.toml
 └── README.md

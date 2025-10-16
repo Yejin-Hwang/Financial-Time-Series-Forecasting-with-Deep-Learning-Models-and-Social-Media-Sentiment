@@ -1,44 +1,48 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Automated TFT (Temporal Fusion Transformer) Stock Price Forecasting
+TFT with Reddit Sentiment and Spike Data - Automated Version
+============================================================
 
-ㅡ
-Features:
-- User-configurable training period (default: 90 days)
-- 5-day prediction horizon
+This script automates the entire TFT forecasting process with Reddit sentiment analysis
+and spike detection data. It includes:
+
 - Automated data loading and preprocessing
-- Model training with early stopping
+- Interactive training period selection
+- TFT model training with sentiment features
 - Performance evaluation and visualization
-- Variable importance analysis
+- Results saving and matrix updates
+
+Date: 2025-08-29
 """
 
+import os
 import sys
+import warnings
+warnings.filterwarnings('ignore')
 
 # =============================================================================
-# 1. Environment Setup and Dependencies
+# 1. Install Dependencies
 # =============================================================================
 
 def install_dependencies():
     """Install required packages if not already installed"""
+    print("🔧 Checking and installing dependencies...")
+    
     try:
         import pytorch_forecasting
         print("✓ pytorch_forecasting already installed")
     except ImportError:
-        print("Installing required packages...")
-        import subprocess
-        subprocess.run(["pip", "install", "pytorch-forecasting==1.0.0", "lightning==2.0.9", "torchmetrics", "--quiet"])
-        print("✓ Installation complete!")
-
-    # Install additional dependencies if needed
+        print("Installing pytorch_forecasting...")
+        os.system("pip install pytorch_forecasting==1.0.0 lightning==2.0.9 torchmetrics --quiet")
+        print("✓ pytorch_forecasting installed")
+    
     try:
         import yfinance
         print("✓ yfinance already installed")
     except ImportError:
         print("Installing yfinance...")
-        import subprocess
-        subprocess.run(["pip", "install", "yfinance", "--quiet"])
-        print("✓ yfinance installation complete!")
+        os.system("pip install yfinance --quiet")
+        print("✓ yfinance installed")
 
 # =============================================================================
 # 2. Import Libraries
@@ -46,182 +50,142 @@ def install_dependencies():
 
 def import_libraries():
     """Import all required libraries"""
-    import pandas as pd
-    import numpy as np
-    import torch
-    import lightning.pytorch as pl
-    from lightning.pytorch import Trainer
-    from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
-    from torch.utils.data import DataLoader
-    from pytorch_forecasting import TimeSeriesDataSet, TemporalFusionTransformer
-    from pytorch_forecasting.data import GroupNormalizer
-    from torchmetrics import MeanSquaredError, MeanAbsoluteError
-    import matplotlib.pyplot as plt
-    import warnings
-    import pickle
-    from datetime import datetime, timedelta
+    print("📚 Importing libraries...")
     
-    # Suppress warnings for cleaner output
-    warnings.filterwarnings('ignore')
-    
-    # Set random seeds for reproducibility
-    pl.seed_everything(42)
-    torch.manual_seed(42)
-    np.random.seed(42)
-    
-    print("✓ All libraries imported successfully!")
-    
-    return (pd, np, torch, pl, Trainer, EarlyStopping, LearningRateMonitor, 
-            ModelCheckpoint, DataLoader, TimeSeriesDataSet, TemporalFusionTransformer,
-            GroupNormalizer, MeanSquaredError, MeanAbsoluteError, plt, 
-            warnings, pickle, datetime, timedelta)
+    try:
+        import pandas as pd
+        import torch
+        import lightning.pytorch as pl
+        from lightning.pytorch import Trainer
+        from torch.utils.data import DataLoader
+        from pytorch_forecasting import TimeSeriesDataSet, TemporalFusionTransformer
+        from pytorch_forecasting.data import GroupNormalizer
+        from torchmetrics import MeanSquaredError, MeanAbsoluteError, SymmetricMeanAbsolutePercentageError
+        import matplotlib.pyplot as plt
+        import numpy as np
+        from datetime import datetime, timedelta
+        import pickle
+        
+        print("✓ All libraries imported successfully!")
+        return True
+        
+    except ImportError as e:
+        print(f"❌ Error importing libraries: {e}")
+        return False
 
 # =============================================================================
-# 3. Configuration and User Input
+# 3. User Configuration
 # =============================================================================
 
 def get_user_config():
-    """Get user configuration for training and prediction"""
-    print("\n=== TFT Configuration ===")
-    
-    # Training period: start date only, fixed 96-day window (based on data rows)
-    from datetime import datetime, timedelta
+    """Ask for training start date only; auto 96-day training + 5-day prediction."""
+    print("\n=== TFT Configuration (96-day training, 5-day prediction) ===")
     try:
-        start_date_str = input("Enter start date (YYYY-MM-DD, e.g., 2023-01-01): ").strip()
+        start_date_str = input("📅 Enter training start date (YYYY-MM-DD): ").strip()
     except EOFError:
         # Auto-use default date when running in non-interactive mode
         start_date_str = "2025-02-01"
         print(f"Using default start date: {start_date_str}")
-    
-    training_days = 96
+
     config = {
         'training_type': 'date_anchor',
         'train_start': start_date_str,
-        'training_days': training_days,
+        'training_days': 96,
         'prediction_days': 5,
-        'max_epochs': 20,
+        'max_epochs': 30,
         'batch_size': 128,
         'learning_rate': 0.03,
     }
-    
-    # All hyperparameters are already set in config above
-    
-    print(f"\n✓ Configuration set:")
-    print(f"  - Training start: {config['train_start']}")
+
+    print("\n✓ Configuration set:")
+    print(f"  - Training start: {config['train_start'] or '(auto from data)'}")
     print(f"  - Training days: {config['training_days']}")
     print(f"  - Prediction days: {config['prediction_days']}")
     print(f"  - Max epochs: {config['max_epochs']}")
     print(f"  - Batch size: {config['batch_size']}")
     print(f"  - Learning rate: {config['learning_rate']}")
-    
+
     return config
 
 # =============================================================================
-# 4. Data Loading and Preprocessing
+# 4. Data Loading and Preparation
 # =============================================================================
 
-def load_and_prepare_data(file_path=None, config=None):
-    """Load and prepare the dataset for TFT"""
-    import pandas as pd  # Import pandas here
-    import os
+def load_and_prepare_data(file_path="nvda_combined_range_norm.csv", config=None):
+    """Load and prepare data for TFT model"""
+    import pandas as pd
     
     print("\n=== Loading and Preparing Data ===")
     
     try:
-        # Resolve default file path if not provided
-        if file_path is None:
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            processed_dir = os.path.join(project_root, 'data', 'processed')
-            # Prefer normalized dataset if available
-            candidates = [
-                os.path.join(processed_dir, 'tsla_price_sentiment_spike_norm.csv'),
-                os.path.join(processed_dir, 'tsla_price_sentiment_spike.csv'),
-                os.path.join(processed_dir, 'tsla_sentiment_spike.csv'),
-                os.path.join(processed_dir, 'TSLA_full_features.csv'),
-                os.path.join(project_root, 'data', 'TSLA_close.csv')
-            ]
-            file_path = next((p for p in candidates if os.path.exists(p)), candidates[0])
-
-        # Load data
         df = pd.read_csv(file_path)
         print(f"✓ Data loaded successfully from {file_path}")
-        
-        # Normalize column names (lowercase, strip spaces)
-        df.columns = [c.strip().lower().replace(' ', '_') for c in df.columns]
-        
-        # Ensure 'date' column exists (handle common alternatives)
-        if 'date' not in df.columns:
-            alternative_date_cols = ['ds', 'timestamp', 'time', 'datetime']
-            matched_alt = next((c for c in alternative_date_cols if c in df.columns), None)
-            if matched_alt is None:
-                # Try fuzzy match for any column containing 'date'
-                matched_alt = next((c for c in df.columns if 'date' in c), None)
-            if matched_alt is not None:
-                df = df.rename(columns={matched_alt: 'date'})
-        
-        # If still missing, try to use DatetimeIndex
-        if 'date' not in df.columns:
-            if isinstance(df.index, pd.DatetimeIndex):
-                df = df.reset_index().rename(columns={'index': 'date'})
-            else:
-                print("❌ Error: No 'date' column found and index is not datetime.")
-                print(f"  - Available columns (normalized): {df.columns.tolist()}")
-                return None
-        
-        # Parse dates (normalize tz-aware to UTC, then drop tz info) and drop invalid
-        df['date'] = pd.to_datetime(df['date'], errors='coerce', utc=True).dt.tz_localize(None)
-        invalid_dates = df['date'].isna().sum()
-        if invalid_dates > 0:
-            print(f"⚠️ Dropping {invalid_dates} rows with invalid dates")
-            df = df.dropna(subset=['date'])
-        
-        # Basic info
         print(f"  - Shape: {df.shape}")
-        min_date = df['date'].min()
-        max_date = df['date'].max()
-        def _fmt(d):
-            try:
-                return d.strftime('%Y-%m-%d')
-            except Exception:
-                return str(d)
-        print(f"  - Date range: {_fmt(min_date)} to {_fmt(max_date)}")
-        print("\nData columns (normalized):")
-        print(df.columns.tolist())
         
-        # Check for missing values
-        missing_values = df.isnull().sum()
-        if missing_values.sum() > 0:
-            print("\nMissing values:")
-            print(missing_values[missing_values > 0])
-            # Fill missing values
-            df = df.fillna(method='ffill').fillna(method='bfill')
-            print("✓ Missing values filled")
-        else:
-            print("✓ No missing values found")
+        # Convert date column to datetime and sort
+        df['date'] = pd.to_datetime(df['date'], errors='coerce', utc=True).dt.tz_localize(None)
+        df = df.sort_values('date').reset_index(drop=True)
+        print(f"  - Date range: {df['date'].min().strftime('%Y-%m-%d')} to {df['date'].max().strftime('%Y-%m-%d')}")
         
-        # Ensure time_idx is properly set
+        # Ensure essential columns
         if 'time_idx' not in df.columns:
             df['time_idx'] = range(len(df))
-            print("✓ time_idx column created")
-        
-        # Ensure unique_id exists
         if 'unique_id' not in df.columns:
-            df['unique_id'] = 'TSLA'
-            print("✓ unique_id column created")
+            df['unique_id'] = 'NVDA'
+
+        # Basic feature hygiene
+        df['volume'] = df.get('volume', 0).fillna(0)
+        df['close'] = df['close'].astype(float)
+
+        # Feature engineering to leverage sentiment/spike information without leakage
+        # Price returns and volatility (encoder-only)
+        df['return_1d'] = df['close'].pct_change()
+        df['rolling_volatility'] = df['return_1d'].rolling(window=14, min_periods=1).std()
+
+        # Sentiment lags and rolling stats (known at prediction time)
+        if 'daily_sentiment' in df.columns:
+            for i in range(1, 6):
+                df[f'daily_sentiment_lag{i}'] = df['daily_sentiment'].shift(i)
+            for w in (3, 7, 14):
+                df[f'daily_sentiment_mean_{w}'] = df['daily_sentiment'].shift(1).rolling(window=w, min_periods=1).mean()
+                df[f'daily_sentiment_std_{w}'] = df['daily_sentiment'].shift(1).rolling(window=w, min_periods=1).std()
+
+        # Spike aggregations (known at prediction time)
+        if 'spike_presence' in df.columns:
+            for w in (3, 7, 14):
+                df[f'spike_presence_sum_{w}'] = df['spike_presence'].shift(1).rolling(window=w, min_periods=1).sum()
+        if 'spike_intensity' in df.columns:
+            for w in (3, 7, 14):
+                df[f'spike_intensity_max_{w}'] = df['spike_intensity'].shift(1).rolling(window=w, min_periods=1).max()
+
+        # Calendar features if not present
+        df['month'] = df['date'].dt.month
+        df['day_of_week'] = df['date'].dt.dayofweek
+        df['quarter'] = df['date'].dt.quarter
+        df['year'] = df['date'].dt.year
+        df['is_month_end'] = df['date'].dt.is_month_end.astype(int)
+        df['is_month_start'] = df['date'].dt.is_month_start.astype(int)
+        # Placeholder for earnings proximity if not provided
+        if 'days_since_earning' not in df.columns:
+            df['days_since_earning'] = 0
+
+        # Fill any NaNs introduced by lag/rolling
+        df = df.fillna(method='ffill').fillna(method='bfill')
+        
+        # Display data info
+        print("\nData columns:")
+        print(df.columns.tolist())
         
         # Filter data by date range if specified
         if config and config.get('training_type') == 'date_range':
             start_date = config['start_date']
             end_date = config['end_date']
             
-            # Ensure datetime (normalize tz-aware to UTC, then drop tz info)
-            df['date'] = pd.to_datetime(df['date'], errors='coerce', utc=True).dt.tz_localize(None)
+            # Convert date column to datetime if it's not already
+            df['date'] = pd.to_datetime(df['date'])
             
-            # Show available date range (safe)
-            min_date = df['date'].min(); max_date = df['date'].max()
-            min_str = min_date.strftime('%Y-%m-%d') if pd.notna(min_date) else str(min_date)
-            max_str = max_date.strftime('%Y-%m-%d') if pd.notna(max_date) else str(max_date)
-            print(f"  - Available data range: {min_str} to {max_str}")
+            # Show available date range
+            print(f"  - Available data range: {df['date'].min().strftime('%Y-%m-%d')} to {df['date'].max().strftime('%Y-%m-%d')}")
             print(f"  - Requested range: {start_date} to {end_date}")
             
             # Filter by date range
@@ -231,16 +195,9 @@ def load_and_prepare_data(file_path=None, config=None):
             if len(df_filtered) == 0:
                 print(f"❌ Error: No data found in date range {start_date} to {end_date}")
                 print("\n💡 Available date ranges:")
-                min_date = df['date'].min(); max_date = df['date'].max()
-                min_str = min_date.strftime('%Y-%m-%d') if pd.notna(min_date) else str(min_date)
-                max_str = max_date.strftime('%Y-%m-%d') if pd.notna(max_date) else str(max_date)
-                recent90 = (max_date - pd.Timedelta(days=90)) if pd.notna(max_date) else max_date
-                recent180 = (max_date - pd.Timedelta(days=180)) if pd.notna(max_date) else max_date
-                recent90_str = recent90.strftime('%Y-%m-%d') if pd.notna(recent90) else str(recent90)
-                recent180_str = recent180.strftime('%Y-%m-%d') if pd.notna(recent180) else str(recent180)
-                print(f"  - Full dataset: {min_str} to {max_str}")
-                print(f"  - Recent 90 days: {recent90_str} to {max_str}")
-                print(f"  - Recent 180 days: {recent180_str} to {max_str}")
+                print(f"  - Full dataset: {df['date'].min().strftime('%Y-%m-%d')} to {df['date'].max().strftime('%Y-%m-%d')}")
+                print(f"  - Recent 90 days: {(df['date'].max() - pd.Timedelta(days=90)).strftime('%Y-%m-%d')} to {df['date'].max().strftime('%Y-%m-%d')}")
+                print(f"  - Recent 180 days: {(df['date'].max() - pd.Timedelta(days=180)).strftime('%Y-%m-%d')} to {df['date'].max().strftime('%Y-%m-%d')}")
                 print("\nUsing full dataset instead.")
             else:
                 # Check if filtered data is sufficient
@@ -259,6 +216,7 @@ def load_and_prepare_data(file_path=None, config=None):
                     df['time_idx'] = range(len(df))
                     print(f"✓ Data filtered to date range: {start_date} to {end_date}")
                     print(f"  - Filtered shape: {df.shape}")
+        
         # Use date_anchor approach - use specified start date + 96 trading days
         if config and config.get('training_type') == 'date_anchor':
             print(f"✓ Using date_anchor approach with user-specified start date")
@@ -277,7 +235,16 @@ def load_and_prepare_data(file_path=None, config=None):
                 # Use training_days + prediction_days to ensure we have enough data for both training and prediction
                 prediction_days = config.get('prediction_days', 5)
                 total_days = training_days + prediction_days
-                end_idx = min(start_idx + total_days, len(df))
+                # Shift window to the end if not enough rows after start
+                if len(df) >= total_days:
+                    end_idx = min(start_idx + total_days, len(df))
+                    if (end_idx - start_idx) < total_days:
+                        end_idx = len(df)
+                        start_idx = max(0, end_idx - total_days)
+                else:
+                    # Dataset shorter than requested window, use all rows
+                    start_idx = 0
+                    end_idx = len(df)
                 df = df.iloc[start_idx:end_idx].copy()
                 df['time_idx'] = range(len(df))
                 print(f"✓ Using {training_days} training days + {prediction_days} prediction days from {start_date}")
@@ -290,16 +257,20 @@ def load_and_prepare_data(file_path=None, config=None):
                 print(f"✓ No start date specified, using last {training_days} days")
                 print(f"  - Training data range: {df['date'].iloc[0]} to {df['date'].iloc[-1]}")
                 print(f"  - Training data points: {len(df)}")
+
+        # Display first few rows
+        print("\nFirst few rows:")
+        print(df.head())
         
         return df
         
     except FileNotFoundError:
         print(f"❌ Error: File {file_path} not found!")
-        print("Please ensure the data file is in the current directory.")
-        raise
+        print("Please make sure the file exists in the current directory.")
+        return None
     except Exception as e:
         print(f"❌ Error loading data: {e}")
-        raise
+        return None
 
 # =============================================================================
 # 5. Create TFT Dataset
@@ -357,27 +328,26 @@ def create_tft_dataset(df, config):
         print(f"  - Training cutoff: time_idx {training_cutoff}")
         print(f"  - Available training data points: {len(df[df['time_idx'] <= training_cutoff])}")
     
-    # Ensure training dataset retains at least one full (encoder+decoder) window
-    # If dataset is small (e.g., start_date_window with encoder==training_days),
-    # using the cutoff filter can remove decoder context entirely, yielding zero samples.
-    min_rows_for_mask = max_encoder_length + 2 * max_prediction_length
-    use_masked = total_data_points >= min_rows_for_mask
-    # For explicit start_date_window, always use the full window without mask
-    if config.get('training_type') == 'start_date_window':
-        use_masked = False
-    if not use_masked:
-        print(f"  - Small window detected ({total_data_points} rows). Using full window without mask.")
-    
-    # Define time-varying features
+    # Define time-varying features (engineered sentiment/spike features as known; target/price as unknown)
     time_varying_known_reals = [
         "time_idx", "month", "day_of_week", "quarter", "year", 
         "is_month_end", "is_month_start", "days_since_earning", "rolling_volatility"
+        # Sentiment lags and aggregates
+        "daily_sentiment_lag1", "daily_sentiment_lag2", "daily_sentiment_lag3", "daily_sentiment_lag4", "daily_sentiment_lag5",
+        "daily_sentiment_mean_3", "daily_sentiment_mean_7", "daily_sentiment_mean_14",
+        "daily_sentiment_std_7", "daily_sentiment_std_14",
+        # Spike aggregates
+        "spike_presence_sum_3", "spike_presence_sum_7", "spike_presence_sum_14",
+        "spike_intensity_max_3", "spike_intensity_max_7", "spike_intensity_max_14"
     ]
     
-    # Prefer normalized volume if available
-    time_varying_unknown_reals = ["close", "volume"]
-    if "volume_norm" in df.columns:
-        time_varying_unknown_reals = ["close", "volume_norm"]
+    time_varying_unknown_reals = [
+        "close", "volume"
+    ]
+    if 'volume_norm' in df.columns:
+        time_varying_unknown_reals = [
+            "close", "volume_norm", "rolling_volatility"
+        ]
     
     # Filter out features that don't exist in the dataset
     available_features = df.columns.tolist()
@@ -388,9 +358,8 @@ def create_tft_dataset(df, config):
     print(f"  - Unknown features: {time_varying_unknown_reals}")
     
     # Create training dataset
-    # Always use the prepared window without applying training cutoff mask to avoid empty datasets
     training_dataset = TimeSeriesDataSet(
-        df,
+        df[lambda x: x.time_idx <= training_cutoff],
         time_idx="time_idx",
         target="close",
         group_ids=["unique_id"],
@@ -409,7 +378,7 @@ def create_tft_dataset(df, config):
     return training_dataset, training_cutoff
 
 # =============================================================================
-# 6. Create DataLoader and Model
+# 6. Create Model and DataLoader
 # =============================================================================
 
 def create_model_and_dataloader(training_dataset, config):
@@ -419,7 +388,7 @@ def create_model_and_dataloader(training_dataset, config):
     
     print("\n=== Creating Model and DataLoader ===")
     
-    # Create data loader
+    # Create DataLoader
     train_dataloader = training_dataset.to_dataloader(
         train=True, 
         batch_size=config['batch_size'], 
@@ -439,7 +408,7 @@ def create_model_and_dataloader(training_dataset, config):
         reduce_on_plateau_patience=4,
     )
     
-    print(f"✓ TFT model created with {sum(p.numel() for p in tft.parameters()):,} parameters")
+    print(f"✓ TFT model created with {sum(p.numel() for p in tft.parameters())} parameters")
     print(f"  - Learning rate: {config['learning_rate']}")
     print(f"  - Hidden size: 16")
     print(f"  - Attention heads: 1")
@@ -447,19 +416,22 @@ def create_model_and_dataloader(training_dataset, config):
     return tft, train_dataloader
 
 # =============================================================================
-# 7. Model Training
+# 7. Train Model
 # =============================================================================
 
-def train_model(tft, train_dataloader, config):
+def train_model(tft, train_dataloader, training_dataset, config):
     """Train the TFT model with callbacks and monitoring"""
     import lightning.pytorch as pl
     from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
     
     print("\n=== Training TFT Model ===")
-    
+
+    # Create validation loader from training_dataset (non-shuffled)
+    val_dataloader = training_dataset.to_dataloader(train=False, batch_size=config['batch_size'], num_workers=0)
+
     # Create callbacks
     early_stopping = EarlyStopping(
-        monitor="train_loss", 
+        monitor="val_loss", 
         min_delta=1e-4, 
         patience=5, 
         verbose=True, 
@@ -469,14 +441,14 @@ def train_model(tft, train_dataloader, config):
     lr_monitor = LearningRateMonitor(logging_interval='step')
     
     checkpoint_callback = ModelCheckpoint(
-        monitor='train_loss',
+        monitor='val_loss',
         dirpath='./checkpoints',
-        filename='tft-{epoch:02d}-{train_loss:.4f}',
+        filename='tft-{epoch:02d}-{val_loss:.4f}',
         save_top_k=3,
         mode='min',
     )
-    
-    # Create trainer
+
+    # Create trainer with validation monitoring
     trainer = pl.Trainer(
         max_epochs=config['max_epochs'],
         accelerator="auto",
@@ -487,24 +459,20 @@ def train_model(tft, train_dataloader, config):
         enable_progress_bar=True,
     )
     
-    print(f"✓ Trainer configured with {config['max_epochs']} max epochs")
+    print(f"✓ Trainer configured with {config['max_epochs']} max epochs (monitoring val_loss)")
     print("  - Early stopping enabled")
     print("  - Learning rate monitoring enabled")
     print("  - Model checkpointing enabled")
     
     # Train the model
     print("\nStarting model training...")
-    trainer.fit(
-        tft,
-        train_dataloaders=train_dataloader,
-    )
-    
+    trainer.fit(tft, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
     print("✅ Training completed!")
     
     return trainer
 
 # =============================================================================
-# 8. Load Best Model and Create Validation Dataset
+# 8. Load Best Model and Validate
 # =============================================================================
 
 def load_best_model_and_validate(trainer, training_dataset, df, tft, config):
@@ -514,23 +482,18 @@ def load_best_model_and_validate(trainer, training_dataset, df, tft, config):
     print("\n=== Loading Best Model and Creating Validation Dataset ===")
     
     # Load best model
-    if hasattr(trainer, 'checkpoint_callback') and trainer.checkpoint_callback.best_model_path:
-        best_model_path = trainer.checkpoint_callback.best_model_path
-        best_tft = TemporalFusionTransformer.load_from_checkpoint(best_model_path)
-        print(f"✓ Best model loaded from: {best_model_path}")
-    else:
-        best_tft = tft  # Use the last trained model if no checkpoint
-        print("✓ Using last trained model (no checkpoint available)")
+    best_model_path = trainer.checkpoint_callback.best_model_path
+    best_tft = TemporalFusionTransformer.load_from_checkpoint(best_model_path)
+    print(f"✓ Best model loaded from: {best_model_path}")
     
     # Create validation dataset
     validation_dataset = TimeSeriesDataSet.from_dataset(
         training_dataset,
-        df,
+        df, 
         predict=True,
         stop_randomization=True,
     )
     
-    # Create validation dataloader
     val_dataloader = validation_dataset.to_dataloader(
         train=False, 
         batch_size=config['batch_size'], 
@@ -553,29 +516,27 @@ def make_predictions(best_tft, val_dataloader):
     
     # Make predictions
     predictions = best_tft.predict(val_dataloader)
-    
-    # Get actual values
     actuals = torch.cat([y[0] for x, y in iter(val_dataloader)])
     
-    print(f"✓ Predictions made successfully")
+    print("✓ Predictions made successfully")
     print(f"  - Prediction shape: {predictions.shape}")
     print(f"  - Actuals shape: {actuals.shape}")
     
     return predictions, actuals
 
 # =============================================================================
-# 10. Performance Evaluation
+# 10. Evaluate Performance
 # =============================================================================
 
 def evaluate_performance(predictions, actuals):
     """Evaluate model performance using various metrics"""
-    import pandas as pd  # Import pandas here
+    import pandas as pd
     import torch
-    from torchmetrics import MeanAbsoluteError, MeanSquaredError
+    from torchmetrics import MeanAbsoluteError, MeanSquaredError, SymmetricMeanAbsolutePercentageError
     
     print("\n=== Performance Evaluation ===")
     
-    # Move tensors to CPU for metric calculation
+    # Move to CPU for evaluation
     predictions_cpu = predictions.cpu()
     actuals_cpu = actuals.cpu()
     
@@ -589,16 +550,17 @@ def evaluate_performance(predictions, actuals):
     rmse_metric = MeanSquaredError(squared=False)
     rmse = rmse_metric(predictions_cpu, actuals_cpu).item()
     
-    # Calculate MAPE as Python float to avoid tensor prints
-    mape = (torch.abs((actuals_cpu - predictions_cpu) / actuals_cpu)).mean().mul(100).item()
+    # Calculate MAPE as float (avoid tensor printing)
+    import torch as _torch
+    mape = (_torch.abs((actuals_cpu - predictions_cpu) / actuals_cpu)).mean().mul(100).item()
     
-    # Create performance summary
-    performance_metrics = {
+    # Create performance metrics DataFrame
+    metrics_df = pd.DataFrame({
         'Metric': [
-            'MAE (Mean Absolute Error)',
-            'MSE (Mean Squared Error)',
-            'RMSE (Root Mean Squared Error)',
-            'MAPE (Mean Absolute Percentage Error)'
+            'MAE',
+            'MSE',
+            'RMSE',
+            'MAPE'
         ],
         'Value': [
             f'{mae:.4f}',
@@ -606,47 +568,40 @@ def evaluate_performance(predictions, actuals):
             f'{rmse:.4f}',
             f'{mape:.4f}'
         ]
-    }
+    })
     
-    metrics_df = pd.DataFrame(performance_metrics)
     print("\n📊 Model Performance Metrics:")
     print(metrics_df)
     
     return {
-        'mae': mae,
-        'mse': mse,
-        'rmse': rmse,
-        'mape': mape
+        'MAE': mae,
+        'MSE': mse,
+        'RMSE': rmse,
+        'MAPE': mape,
     }
 
 # =============================================================================
-# 11. Visualization
+# 11. Create Visualizations
 # =============================================================================
 
 def create_visualizations(predictions, actuals, config, df=None):
     """Create comprehensive visualizations of predictions vs actuals"""
-    import matplotlib.pyplot as plt  # Import matplotlib here
-    import numpy as np  # Import numpy here
+    import matplotlib.pyplot as plt
+    import numpy as np
     
     print("\n=== Creating Visualizations ===")
-    
-    # Debug: Check the data being passed to visualization
-    if df is not None:
-        print(f"DEBUG: Visualization df shape: {df.shape}")
-        print(f"DEBUG: Visualization df date range: {df['date'].iloc[0]} to {df['date'].iloc[-1]}")
-        print(f"DEBUG: Visualization df time_idx range: {df['time_idx'].min()} to {df['time_idx'].max()}")
-    else:
-        print("DEBUG: No df passed to visualization")
     
     # Set style
     try:
         plt.style.use('seaborn-v0_8')
     except:
-        plt.style.use('default')  # Fallback to default style
+        plt.style.use('default')
     
     # Move to CPU for plotting
     predictions_cpu = predictions.cpu().numpy()
     actuals_cpu = actuals.cpu().numpy()
+    
+
     
     # Create standalone Actual vs Prediction plot with training period
     create_standalone_plot(predictions, actuals, config, df)
@@ -675,7 +630,7 @@ def create_standalone_plot(predictions, actuals, config, df=None):
     
     if df is not None and 'date' in df.columns:
         # Convert dates
-        df['date'] = pd.to_datetime(df['date'], errors='coerce', utc=True).dt.tz_localize(None)
+        df['date'] = pd.to_datetime(df['date'])
         
         # Get training period dates - use the actual training data from the model
         total_points = len(df)
@@ -720,9 +675,9 @@ def create_standalone_plot(predictions, actuals, config, df=None):
         training_cutoff = df["time_idx"].max() - config["prediction_days"]
         actual_training_days = len(df[df['time_idx'] <= training_cutoff])
         if config.get('training_type') == 'date_range':
-            title = f'TFT Model: Training ({config["start_date"]} to {config["end_date"]}) + {config["prediction_days"]} Days Prediction'
+            title = f'TFT Model with Sentiment & Spike: Training ({config["start_date"]} to {config["end_date"]}) + {config["prediction_days"]} Days Prediction'
         else:
-            title = f'TFT Model: {actual_training_days} Days Training + {config["prediction_days"]} Days Prediction'
+            title = f'TFT Model with Sentiment & Spike: {actual_training_days} Days Training + {config["prediction_days"]} Days Prediction'
         
         plt.title(title, fontsize=14, fontweight='bold')
         plt.legend(fontsize=10)
@@ -750,7 +705,7 @@ def create_standalone_plot(predictions, actuals, config, df=None):
         
         plt.xlabel('Time Steps', fontsize=12)
         plt.ylabel('Stock Price (Normalized)', fontsize=12)
-        plt.title(f'TFT Model: {config["training_days"]} Days Training + {config["prediction_days"]} Days Prediction', 
+        plt.title(f'TFT Model with Sentiment & Spike: {config["training_days"]} Days Training + {config["prediction_days"]} Days Prediction', 
                  fontsize=14, fontweight='bold')
         plt.legend(fontsize=10)
         plt.grid(True, alpha=0.3)
@@ -762,7 +717,7 @@ def create_standalone_plot(predictions, actuals, config, df=None):
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     results_dir = os.path.join(project_root, 'results')
     os.makedirs(results_dir, exist_ok=True)
-    plot_path = os.path.join(results_dir, 'TSLA_TFT_baseline_forecast.png')
+    plot_path = os.path.join(results_dir, 'NVDA_TFT_with_reddit_sentiment_forecast.png')
     try:
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         print(f"Plot saved to {plot_path}")
@@ -778,8 +733,8 @@ def create_standalone_plot(predictions, actuals, config, df=None):
 # =============================================================================
 
 def interpret_model(best_tft, val_dataloader):
-    """Interpret model predictions and show variable importance"""
-    import matplotlib.pyplot as plt  # Import matplotlib here
+    """Interpret model outputs and attention weights"""
+    import matplotlib.pyplot as plt
     
     print("\n=== Model Interpretation ===")
     
@@ -789,20 +744,23 @@ def interpret_model(best_tft, val_dataloader):
         
         # Variable importance
         interpretation = best_tft.interpret_output(raw_predictions[0], reduction="sum")
-        
-        # Plot variable importance
-        plt.figure(figsize=(10, 6))
         best_tft.plot_interpretation(interpretation)
-        plt.title("Variable Importance Analysis", fontsize=14, fontweight='bold')
-        plt.tight_layout()
+        plt.title("Variable Importance")
         plt.show()
         
-        # Attention visualization
-        x = raw_predictions[1]
-        plt.figure(figsize=(12, 8))
-        best_tft.plot_attention(x, raw_predictions[0], idx=0)
-        plt.title("Attention Weights Visualization", fontsize=14, fontweight='bold')
-        plt.tight_layout()
+        # Prediction errors over time
+        true = raw_predictions[1]["decoder_target"]
+        pred = raw_predictions[0]
+        error = (pred - true).abs().detach().cpu().numpy()
+        
+        plt.figure(figsize=(10, 4))
+        plt.plot(error[0], label="Prediction Error (abs)")
+        plt.axvline(x=0, color='gray', linestyle='--', label="Prediction Start")
+        plt.title("Prediction Error Over Forecast Horizon (Regime Change Detection)")
+        plt.xlabel("Time Step")
+        plt.ylabel("Error")
+        plt.legend()
+        plt.grid()
         plt.show()
         
         print("✓ Model interpretation completed!")
@@ -812,114 +770,121 @@ def interpret_model(best_tft, val_dataloader):
         print("This is optional and doesn't affect the main predictions.")
 
 # =============================================================================
-# 13. Save Results and Update Performance Matrix
+# 13. Save Results and Update Matrix
 # =============================================================================
 
 def save_results_and_update_matrix(performance_metrics, config):
-    """Save results and update the performance matrix"""
-    import pandas as pd  # Import pandas here
-    from datetime import datetime  # Import datetime here
-    import pickle  # Import pickle here
-    
+    """Save results and update performance matrix"""
+    import pandas as pd
+    from datetime import datetime
+    import pickle
+
     print("\n=== Saving Results ===")
-    
-    # Create results summary
-    results_summary = {
-        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'training_days': config['training_days'],
-        'prediction_days': config['prediction_days'],
-        'max_epochs': config['max_epochs'],
-        'batch_size': config['batch_size'],
-        'learning_rate': config['learning_rate'],
-        'mae': performance_metrics['mae'],
-        'mse': performance_metrics['mse'],
-        'rmse': performance_metrics['rmse'],
-        'mape': performance_metrics['mape']
-        
-    }
-    
-   # Prepare results directory under project root
-    import os
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    results_dir = os.path.join(project_root, 'results')
-    os.makedirs(results_dir, exist_ok=True)
 
-    # Save results to CSV
-    results_df = pd.DataFrame([results_summary])
-    # results_filename = os.path.join(results_dir, f"TFT_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
-    # results_df.to_csv(results_filename, index=False)
-    # print(f"✓ Results saved to: {results_filename}")
-    
-    # Update Results Matrix
-    print("\n## Update Results Matrix")
-    
-    # Load existing results matrix
     try:
-        with open(os.path.join(results_dir, "TSLA_results_matrix.pkl"), "rb") as f:
-            matrix = pickle.load(f)
-        print("✓ Loaded existing results matrix")
-        print("\nCurrent matrix:")
-        print(matrix)
-    except FileNotFoundError:
-        print("⚠️  No existing results matrix found. Creating new one...")
-        # Create new matrix if none exists
-        matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+        # Resolve results directory under project root
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        results_dir = os.path.join(project_root, "results")
+        os.makedirs(results_dir, exist_ok=True)
 
-    # Add TFT model results (standardized key)
-    print("\nAdding TFT model results...")
-    matrix.loc["TFT_baseline"] = [
-        performance_metrics['mae'], 
-        performance_metrics['mse'], 
-        performance_metrics['rmse'],
-        performance_metrics['mape']
-    ]
-    
-    print("\nUpdated matrix:")
-    print(matrix)
-    
-    # Save updated matrix
-    with open(os.path.join(results_dir, "TSLA_results_matrix.pkl"), "wb") as f:
-        pickle.dump(matrix, f)
-    # Also save as CSV (reordered rows)
-    csv_path = os.path.join(results_dir, "result_matrix.csv")
-    try:
-        if os.path.exists(csv_path):
-            global_matrix = pd.read_csv(csv_path, index_col=0)
+        # Use NVDA-specific pickle filename
+        matrix_path = os.path.join(results_dir, "NVDA_results_matrix.pkl")
+
+        # Load existing matrix or create new one
+        if os.path.exists(matrix_path):
+            with open(matrix_path, "rb") as f:
+                matrix = pickle.load(f)
         else:
-            global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
-        if 'MAPE' not in global_matrix.columns:
-            global_matrix = global_matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
-        global_matrix.loc['TFT_baseline'] = [
-            performance_metrics['mae'],
-            performance_metrics['mse'],
-            performance_metrics['rmse'],
-            performance_metrics['mape']
-        ]
-        desired_order = ['ARIMA', 'TimesFM', 'Chronos', 'TFT_baseline', 'TFT_Reddit']
-        ordered = [i for i in desired_order if i in global_matrix.index]
-        rest = [i for i in global_matrix.index if i not in desired_order]
-        global_matrix = global_matrix.loc[ordered + rest]
-        global_matrix.to_csv(csv_path)
-    except Exception as e:
-        print(f"⚠️ Failed to update global results matrix CSV: {e}")
-    
-    print("\nTFT analysis complete.")
-    print(f"📊 Model trained on {config['training_days']} days of data")
-    print(f"🔮 Predictions made for {config['prediction_days']} days ahead")
-    print(f"📈 Best RMSE: {performance_metrics['rmse']:.4f}")
+            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
 
+        # Ensure columns for newer metrics (robust if missing)
+        for col in ['MAE', 'MSE', 'RMSE', 'MAPE']:
+            if col not in matrix.columns:
+                matrix[col] = pd.NA
+        matrix = matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+
+        # Normalize legacy row keys
+        rename_map = {}
+        if any(i in matrix.index for i in ['chronos', 'TFT_Reddit_Y', 'TFT_reddit_N']):
+            if 'chronos' in matrix.index: rename_map['chronos'] = 'Chronos'
+            if 'TFT_Reddit_Y' in matrix.index: rename_map['TFT_Reddit_Y'] = 'TFT_Reddit'
+            if 'TFT_reddit_N' in matrix.index: rename_map['TFT_reddit_N'] = 'TFT_baseline'
+            matrix = matrix.rename(index=rename_map)
+
+        # Always update TFT_Reddit
+        model_name = "TFT_Reddit"
+        matrix.loc[model_name] = [
+            performance_metrics.get('MAE', None),
+            performance_metrics.get('MSE', None),
+            performance_metrics.get('RMSE', None),
+            float(performance_metrics.get('MAPE', 0.0))
+        ]
+
+        # Save updated matrix to pickle
+        with open(matrix_path, "wb") as f:
+            pickle.dump(matrix, f)
+
+        # Also update CSV in results directory for NVDA
+        csv_path = os.path.join(results_dir, "result_matrix_nvda.csv")
+        try:
+            if os.path.exists(csv_path):
+                global_matrix = pd.read_csv(csv_path, index_col=0)
+            else:
+                global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+
+            # Ensure columns present
+            for col in ['MAE', 'MSE', 'RMSE', 'MAPE']:
+                if col not in global_matrix.columns:
+                    global_matrix[col] = pd.NA
+            global_matrix = global_matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+
+            # Same index name normalization
+            g_rename_map = {}
+            if 'chronos' in global_matrix.index: g_rename_map['chronos'] = 'Chronos'
+            if 'TFT_Reddit_Y' in global_matrix.index: g_rename_map['TFT_Reddit_Y'] = 'TFT_Reddit'
+            if 'TFT_reddit_N' in global_matrix.index: g_rename_map['TFT_reddit_N'] = 'TFT_baseline'
+            if g_rename_map: global_matrix = global_matrix.rename(index=g_rename_map)
+
+            global_matrix.loc[model_name] = [
+                performance_metrics.get('MAE', None),
+                performance_metrics.get('MSE', None),
+                performance_metrics.get('RMSE', None),
+                float(performance_metrics.get('MAPE', 0.0))
+            ]
+
+            # Reorder rows if possible (put known models on top)
+            desired_order = ['ARIMA', 'TimesFM', 'Chronos', 'TFT_baseline', 'TFT_Reddit']
+            ordered = [i for i in desired_order if i in global_matrix.index]
+            rest = [i for i in global_matrix.index if i not in desired_order]
+            global_matrix = global_matrix.loc[ordered + rest]
+            global_matrix.to_csv(csv_path, index=True)
+        except Exception as e:
+            print(f"⚠️ Error updating global results matrix CSV: {e}")
+
+        # Display updated matrix (reordered for consistency)
+        try:
+            desired_order = ['ARIMA', 'TimesFM', 'Chronos', 'TFT_baseline', 'TFT_Reddit']
+            ordered = [i for i in desired_order if i in matrix.index]
+            rest = [i for i in matrix.index if i not in desired_order]
+            matrix_display = matrix.loc[ordered + rest]
+        except Exception:
+            matrix_display = matrix
+        print(f"\n📋 Updated Results Matrix:")
+        print(matrix_display)
+
+    except Exception as e:
+        print(f"⚠️ Error updating performance matrix: {e}")
 
 # =============================================================================
-# Main Execution
+# 14. Main Function
 # =============================================================================
 
 def main():
-    """Main execution function"""
-    print("🚀 Starting Automated TFT Analysis...")
+    """Main function to run the entire TFT analysis pipeline"""
+    print("Starting Automated TFT Analysis with Reddit Sentiment & Spike Data...")
     
     # Set random seed for reproducibility
     import torch
-    import os
     import random
     import numpy as np
     
@@ -946,28 +911,22 @@ def main():
     install_dependencies()
     
     # Import libraries
-    (pd, np, torch, pl, Trainer, EarlyStopping, LearningRateMonitor, 
-     ModelCheckpoint, DataLoader, TimeSeriesDataSet, TemporalFusionTransformer,
-     GroupNormalizer, MeanSquaredError, MeanAbsoluteError, plt, 
-     warnings, pickle, datetime, timedelta) = import_libraries()
+    if not import_libraries():
+        print("❌ Failed to import libraries. Exiting.")
+        return
     
     # Get user configuration
     config = get_user_config()
     
-    # Build dataset path from project root and load data
+    # Load and prepare data
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    processed_dir = os.path.join(project_root, 'data', 'processed')
-    candidates = [
-        os.path.join(processed_dir, 'tsla_price_sentiment_spike_norm.csv'),
-        os.path.join(processed_dir, 'tsla_price_sentiment_spike.csv'),
-        os.path.join(processed_dir, 'TSLA_full_features.csv'),
-        os.path.join(project_root, 'data', 'TSLA_close.csv')
-    ]
-    data_path = next((p for p in candidates if os.path.exists(p)), candidates[0])
-    print(f"Using data file: {data_path}")
-    df = load_and_prepare_data(file_path=data_path, config=config)
-    print("\nFirst few rows:")
-    print(df.head())
+    data_path = os.path.join(project_root, "data", "processed", "nvda_combined_range_norm.csv")
+    if not os.path.exists(data_path):
+        raise FileNotFoundError(f"Required file not found: {data_path}")
+    df = load_and_prepare_data(data_path, config)
+    if df is None:
+        print("❌ Failed to load data. Exiting.")
+        return
     
     # Create TFT dataset
     training_dataset, training_cutoff = create_tft_dataset(df, config)
@@ -975,8 +934,8 @@ def main():
     # Create model and dataloader
     tft, train_dataloader = create_model_and_dataloader(training_dataset, config)
     
-    # Train the model
-    trainer = train_model(tft, train_dataloader, config)
+    # Train model
+    trainer = train_model(tft, train_dataloader, training_dataset, config)
     
     # Load best model and create validation dataset
     best_tft, val_dataloader = load_best_model_and_validate(trainer, training_dataset, df, tft, config)
@@ -995,6 +954,12 @@ def main():
     
     # Save results and update matrix
     save_results_and_update_matrix(performance_metrics, config)
+    
+    # Final summary
+    print(f"\n🎉 TFT Analysis with Reddit Sentiment & Spike Complete!")
+    print(f"📊 Model trained on {config['training_days']} days of data")
+    print(f"🔮 Predictions made for {config['prediction_days']} days ahead")
+    print(f"📈 Best RMSE: {performance_metrics['RMSE']:.4f}")
 
 if __name__ == "__main__":
     main()
