@@ -1,0 +1,94 @@
+%% Mermaid Flowchart: End-to-end pipeline with data, modeling, ops
+flowchart LR
+  %% Sections
+  subgraph S0[API]
+    YF[Yahoo Finance API]
+    RD[Reddit API]
+  end
+
+  subgraph S1[Data Processing]
+    CP[Closing Price]
+    FE[Feature Engineering\n(technical features, lags, rolling stats)]
+    RP[Reddit Posts]
+    FB[FinBERT Inference]
+    SS[Daily Sentiment Score]
+    AT[Activity Timing]
+    ID[Impact Day Calculation]
+    LW[LOWESS Upper 95% bound]
+    SF[Spike Features]
+    DV[Data Validation\n(missing/duplicates/sorting)]
+    SPL[Split Strategy\n(rolling/holdout, no leakage)]
+    SC[Scaling/Normalization\n(Robust, log1p volume)]
+  end
+
+  subgraph S2[Models]
+    subgraph U[Univariate]
+      ARIMA[ARIMA]
+      TFM[TimesFM]
+      CH[Chronos-T5]
+    end
+    TFT0[TFT\n(price-only)]
+    TFTS[TFT + Sentiment & Spikes]
+  end
+
+  subgraph S3[Evaluation]
+    MET[MAE / MSE / RMSE / MAPE]
+    RT[Execution Time]
+    MX[Results Matrix\n(results/result_matrix_*.csv, *.pkl)]
+  end
+
+  subgraph S4[Ops & Repro]
+    EXP[Experiment Tracking\n(seeds, params, commit hash)]
+    REG[Model Registry\n(best checkpoint)]
+    MON[Monitoring & Drift]
+  end
+
+  %% Flows
+  YF --> CP
+  YF --> FE
+  RD --> RP
+  RP --> FB --> SS
+  RD --> AT --> ID
+  AT --> LW --> SF
+
+  %% Pre-model processing
+  CP --> DV
+  FE --> DV
+  SS --> DV
+  SF --> DV
+  DV --> SC --> SPL
+
+  %% To models
+  CP --> U
+  FE --> TFT0
+  SS --> TFTS
+  SF --> TFTS
+
+  SPL --> ARIMA
+  SPL --> TFM
+  SPL --> CH
+  SPL --> TFT0
+  SPL --> TFTS
+
+  %% Evaluation outputs
+  ARIMA --> MET
+  TFM --> MET
+  CH --> MET
+  TFT0 --> MET
+  TFTS --> MET
+
+  ARIMA -.-> RT
+  TFM -.-> RT
+  CH -.-> RT
+  TFT0 -.-> RT
+  TFTS -.-> RT
+
+  MET --> MX
+  RT --> MX
+
+  %% Ops
+  MX --> EXP
+  TFT0 -. checkpoints .-> REG
+  TFTS -. checkpoints .-> REG
+  EXP --> MON
+

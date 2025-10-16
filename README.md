@@ -6,9 +6,75 @@ Clean, reproducible pipelines for forecasting stock prices using ARIMA, Google T
 
 ### Pipeline overview
 
-Add the following image at `docs/pipeline_overview.png` to render the diagram:
+You can view the pipeline as Mermaid (renders on GitHub):
 
-![Pipeline Overview](docs/pipeline_overview.png?v=2)
+```mermaid
+%% Auto-generated from docs/pipeline_overview.mmd
+flowchart LR
+  subgraph S0[API]
+    YF[Yahoo Finance API]
+    RD[Reddit API]
+  end
+  subgraph S1[Data Processing]
+    CP[Closing Price]
+    FE[Feature Engineering]
+    RP[Reddit Posts]
+    FB[FinBERT Inference]
+    SS[Daily Sentiment Score]
+    AT[Activity Timing]
+    ID[Impact Day Calculation]
+    LW[LOWESS Upper 95% bound]
+    SF[Spike Features]
+    DV[Data Validation]
+    SPL[Split Strategy]
+    SC[Scaling/Normalization]
+  end
+  subgraph S2[Models]
+    subgraph U[Univariate]
+      ARIMA[ARIMA]
+      TFM[TimesFM]
+      CH[Chronos-T5]
+    end
+    TFT0[TFT (price-only)]
+    TFTS[TFT + Sentiment & Spikes]
+  end
+  subgraph S3[Evaluation]
+    MET[MAE / MSE / RMSE / MAPE]
+    RT[Execution Time]
+    MX[Results Matrix]
+  end
+  YF --> CP
+  YF --> FE
+  RD --> RP --> FB --> SS
+  RD --> AT --> ID
+  AT --> LW --> SF
+  CP --> DV
+  FE --> DV
+  SS --> DV
+  SF --> DV
+  DV --> SC --> SPL
+  CP --> U
+  FE --> TFT0
+  SS --> TFTS
+  SF --> TFTS
+  SPL --> ARIMA
+  SPL --> TFM
+  SPL --> CH
+  SPL --> TFT0
+  SPL --> TFTS
+  ARIMA --> MET
+  TFM --> MET
+  CH --> MET
+  TFT0 --> MET
+  TFTS --> MET
+  ARIMA -.-> RT
+  TFM -.-> RT
+  CH -.-> RT
+  TFT0 -.-> RT
+  TFTS -.-> RT
+  MET --> MX
+  RT --> MX
+```
 
 If you already have processed features in `data/processed/` (default repo includes TSLA/AAPL/NVDA), you can skip raw data extraction and run the notebooks directly:
 
