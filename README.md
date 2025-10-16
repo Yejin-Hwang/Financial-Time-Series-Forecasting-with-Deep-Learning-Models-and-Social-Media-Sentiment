@@ -154,23 +154,13 @@ This section highlights the **relative performance gain** achieved by integratin
 
 Parsed from execution time matrices (lower is faster; values vary by run/hardware):
 
-#### TSLA Execution Times
-| Model                   |  Time (s) |
-|-------------------------|----------:|
-| ARIMA                   |      6.86 |
-| TimesFM                 |     20.48 |
-| Chronos                 |      9.72 |
-| TFT_baseline            |     33.81 |
-| TFT_with_Reddit_Sentiment |     66.98 |
-
-#### NVDA Execution Times
-| Model                   |  Time (s) |
-|-------------------------|----------:|
-| ARIMA                   |     14.23 |
-| TimesFM                 |     30.04 |
-| Chronos                 |     12.91 |
-| TFT_baseline            |    133.08 |
-| TFT_with_Reddit_Sentiment |     45.93 |
+| Model                      | TSLA Time (s) | NVDA Time (s) |
+|----------------------------|--------------:|--------------:|
+| ARIMA                      |          6.86 |         14.23 |
+| TimesFM                    |         20.48 |         30.04 |
+| Chronos                    |          9.72 |         12.91 |
+| TFT_baseline               |         33.81 |        133.08 |
+| TFT_with_Reddit_Sentiment  |         66.98 |         45.93 |
 
 **Performance Notes:**
 - NVDA models generally take longer to train (especially TFT_baseline: 133s vs 34s)
