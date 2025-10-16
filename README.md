@@ -136,7 +136,12 @@ This section highlights the **relative performance gain** achieved by integratin
 | Model | TSLA RMSE | ΔRMSE vs Baseline | TSLA MAPE | ΔMAPE vs Baseline | NVDA RMSE | ΔRMSE vs Baseline | NVDA MAPE | ΔMAPE vs Baseline |
 |:------|-----------:|------------------:|-----------:|------------------:|-----------:|------------------:|-----------:|------------------:|
 | **TFT_baseline** | 10.07 | — | 3.12 | — | 1.98 | — | 1.32 | — |
-| **TFT_Reddit** | **3.33** | **−66.9%** | **0.88** | **−71.8%** | **0.61** | **−69.2%** | **0.36** | **−72.7%** |
+
+### 📊 Visualizing Performance Improvement
+
+The figure below visualizes the relative error reduction (%) achieved by the sentiment-enhanced TFT (TFT_Reddit) compared to the baseline TFT model.
+
+![TFT Improvement Visualization](results/tft_improvement.png)
 
 ---
 
