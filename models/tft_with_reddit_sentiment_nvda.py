@@ -632,16 +632,38 @@ def create_standalone_plot(predictions, actuals, config, df=None):
         # Convert dates
         df['date'] = pd.to_datetime(df['date'])
         
-        # Get training period dates - use the actual training data from the model
-        total_points = len(df)
-        training_points = config['training_days']
-        
-        # Get the actual training data (last N days before prediction)
-        training_dates = df['date'].iloc[-training_points-config['prediction_days']:-config['prediction_days']].tolist()
-        training_values = df['close'].iloc[-training_points-config['prediction_days']:-config['prediction_days']].values
-        
-        # Get prediction dates (the last N days that were used for prediction)
-        prediction_dates = df['date'].iloc[-config['prediction_days']:].tolist()
+        # Enforce anchor window for plotting so dates before train_start don't show
+        training_points = int(config['training_days'])
+        prediction_points = int(config['prediction_days'])
+        total_needed = max(1, training_points + prediction_points)
+
+        plot_df = df.copy().reset_index(drop=True)
+        anchor_str = config.get('train_start')
+        if anchor_str:
+            try:
+                anchor_dt = pd.to_datetime(anchor_str)
+                mask = plot_df['date'] >= anchor_dt
+                if mask.any():
+                    start_idx = int(mask.idxmax())
+                    end_idx = min(start_idx + total_needed, len(plot_df))
+                    if end_idx - start_idx <= 0:
+                        start_idx = max(0, len(plot_df) - total_needed)
+                        end_idx = len(plot_df)
+                    plot_df = plot_df.iloc[start_idx:end_idx].copy().reset_index(drop=True)
+            except Exception:
+                pass
+
+        if len(plot_df) >= total_needed:
+            plot_df = plot_df.iloc[-total_needed:].copy().reset_index(drop=True)
+
+        # Compute safe counts
+        n_train = min(training_points, max(0, len(plot_df) - prediction_points))
+        n_pred = min(prediction_points, max(0, len(plot_df) - n_train))
+
+        # Build windows
+        training_dates = plot_df['date'].iloc[:n_train].tolist()
+        training_values = plot_df['close'].iloc[:n_train].values
+        prediction_dates = plot_df['date'].iloc[n_train:n_train + n_pred].tolist()
         
         # Plot training data
         plt.plot(training_dates, training_values, 
@@ -652,14 +674,15 @@ def create_standalone_plot(predictions, actuals, config, df=None):
                 linewidth=3, marker='o', markersize=8)
         
         # Plot actuals for prediction period
-        actual_values = df['close'].iloc[-config['prediction_days']:].values
+        actual_values = plot_df['close'].iloc[n_train:n_train + n_pred].values
         plt.plot(prediction_dates, actual_values, 'g-', label='Actual (Close Price)', 
                 linewidth=2, marker='s', markersize=6)
         
         # Add vertical line to separate training and prediction
-        last_training_date = training_dates[-1]
-        plt.axvline(x=last_training_date, color='gray', linestyle='--', alpha=0.7, 
-                   label='Training End / Prediction Start')
+        if len(training_dates) > 0:
+            last_training_date = training_dates[-1]
+            plt.axvline(x=last_training_date, color='gray', linestyle='--', alpha=0.7, 
+                       label='Training End / Prediction Start')
         
         # Format x-axis - show only year and month for cleaner display
         plt.gca().xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y-%m'))
@@ -672,8 +695,7 @@ def create_standalone_plot(predictions, actuals, config, df=None):
         plt.ylabel('Stock Price (USD)', fontsize=12)
         
         # Add title with training info - use actual training data count
-        training_cutoff = df["time_idx"].max() - config["prediction_days"]
-        actual_training_days = len(df[df['time_idx'] <= training_cutoff])
+        actual_training_days = len(training_dates)
         if config.get('training_type') == 'date_range':
             title = f'TFT Model with Sentiment & Spike: Training ({config["start_date"]} to {config["end_date"]}) + {config["prediction_days"]} Days Prediction'
         else:
@@ -681,6 +703,21 @@ def create_standalone_plot(predictions, actuals, config, df=None):
         
         plt.title(title, fontsize=14, fontweight='bold')
         plt.legend(fontsize=10)
+        # Clamp x-axis to the enforced window and ensure the anchor month (e.g., 2025-02) appears
+        if len(training_dates) and len(prediction_dates):
+            try:
+                left_bound = training_dates[0]
+                # Prefer explicit anchor date if provided
+                if config.get('train_start'):
+                    try:
+                        left_bound = pd.to_datetime(config['train_start'])
+                        # Snap to first day of that month so the '%Y-%m' tick (e.g., 2025-02) shows
+                        left_bound = left_bound.replace(day=1)
+                    except Exception:
+                        pass
+                plt.xlim(left_bound, prediction_dates[-1])
+            except Exception:
+                pass
         
     else:
         # Fallback without dates

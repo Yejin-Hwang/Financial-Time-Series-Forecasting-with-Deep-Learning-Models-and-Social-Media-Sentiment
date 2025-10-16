@@ -216,8 +216,8 @@ def main(
         except Exception as e:
             print(f'Failed to save per-ticker matrix: {e}')
 
-        # NVDA CSV (separate file)
-        csv_path = results_dir / 'result_matrix_nvda.csv'
+        # Global CSV
+        csv_path = results_dir / 'result_matrix.csv'
         try:
             if csv_path.exists():
                 global_matrix = pd.read_csv(csv_path, index_col=0)
