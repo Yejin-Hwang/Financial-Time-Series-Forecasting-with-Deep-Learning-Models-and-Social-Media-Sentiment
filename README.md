@@ -206,7 +206,7 @@ The Temporal Fusion Transformer (TFT) model provides rich interpretability throu
 
 - **Variable Importance**: Baseline TFT relies on temporal patterns (`is_month_start`: 24%, `year`: 21%), while Reddit Sentiment TFT shows overwhelming dependence on sentiment volatility (`daily_sentiment_std_14`: 98%), indicating that sentiment data's variability is the strongest predictor for stock price movements.
 
-#### Baseline TFT (Price Features Only)
+#### TSLA Baseline TFT (Price Features Only)
 <table>
 <tr>
 <td align="center" width="33%">
@@ -224,7 +224,7 @@ The Temporal Fusion Transformer (TFT) model provides rich interpretability throu
 </tr>
 </table>
 
-#### TFT with Reddit Sentiment
+#### TSLA TFT with Reddit Sentiment
 <table>
 <tr>
 <td align="center" width="33%">
@@ -238,6 +238,39 @@ The Temporal Fusion Transformer (TFT) model provides rich interpretability throu
 <td align="center" width="33%">
 <img src="results/TSLA_TFT_sentiment_variable_importance_20250928_142923.png" width="250">
 <br><b>Variable Importance</b>
+</td>
+</tr>
+</table>
+
+### Model Forecasts (NVDA)
+
+<table>
+<tr>
+<td align="center" width="50%">
+<img src="results/NVDA_ARIMA_forecast.png" width="375">
+<br><b>ARIMA</b><br>RMSE: 6.61
+</td>
+<td align="center" width="50%">
+<img src="results/NVDA_TimesFM_forecast.png" width="375">
+<br><b>TimesFM</b><br>RMSE: 8.26
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<img src="results/NVDA_Chronos_forecast.png" width="375">
+<br><b>Chronos</b><br>RMSE: 8.41
+</td>
+<td align="center" width="50%">
+<img src="results/NVDA_TFT_baseline_forecast.png" width="375">
+<br><b>TFT Baseline</b><br>RMSE: 1.98
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<img src="results/NVDA_TFT_with_reddit_sentiment_forecast.png" width="375">
+<br><b>TFT with Reddit Sentiment</b><br>RMSE: 0.61 ⭐
+</td>
+<td align="center" width="50%">
 </td>
 </tr>
 </table>
@@ -274,39 +307,6 @@ The Temporal Fusion Transformer (TFT) model provides rich interpretability throu
 <td align="center" width="33%">
 <img src="results/NVDA_TFT_with_sentiment_variable_importance.png" width="250">
 <br><b>Variable Importance</b>
-</td>
-</tr>
-</table>
-
-### Model Forecasts (NVDA)
-
-<table>
-<tr>
-<td align="center" width="50%">
-<img src="results/NVDA_ARIMA_forecast.png" width="375">
-<br><b>ARIMA</b><br>RMSE: 6.61
-</td>
-<td align="center" width="50%">
-<img src="results/NVDA_TimesFM_forecast.png" width="375">
-<br><b>TimesFM</b><br>RMSE: 8.26
-</td>
-</tr>
-<tr>
-<td align="center" width="50%">
-<img src="results/NVDA_Chronos_forecast.png" width="375">
-<br><b>Chronos</b><br>RMSE: 8.41
-</td>
-<td align="center" width="50%">
-<img src="results/NVDA_TFT_baseline_forecast.png" width="375">
-<br><b>TFT Baseline</b><br>RMSE: 1.98
-</td>
-</tr>
-<tr>
-<td align="center" width="50%">
-<img src="results/NVDA_TFT_with_reddit_sentiment_forecast.png" width="375">
-<br><b>TFT with Reddit Sentiment</b><br>RMSE: 0.61 ⭐
-</td>
-<td align="center" width="50%">
 </td>
 </tr>
 </table>
