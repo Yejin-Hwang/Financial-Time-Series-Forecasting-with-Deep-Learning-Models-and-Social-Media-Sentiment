@@ -3,8 +3,9 @@ import numpy as np
 
 # Data
 stocks = ['TSLA', 'NVDA']
-rmse_reduction = [66.9, 69.2]
-mape_reduction = [71.8, 72.7]
+rmse_reduction = [40.2, 42.6]
+mape_reduction = [87.9, 88.9]
+
 
 x = np.arange(len(stocks))
 width = 0.35

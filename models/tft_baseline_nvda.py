@@ -188,9 +188,10 @@ def load_and_prepare_data(file_path=None, config=None):
         if missing_values.sum() > 0:
             print("\nMissing values:")
             print(missing_values[missing_values > 0])
-            # Fill missing values
-            df = df.fillna(method='ffill').fillna(method='bfill')
-            print("✓ Missing values filled")
+            # Fill missing values (exclude target 'close' and 'date')
+            safe_cols = [c for c in df.columns if c not in ('close', 'date')]
+            df[safe_cols] = df[safe_cols].fillna(method='ffill').fillna(method='bfill')
+            print("✓ Missing values filled (target 'close' untouched)")
         else:
             print("✓ No missing values found")
         

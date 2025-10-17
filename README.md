@@ -241,7 +241,7 @@ The Temporal Fusion Transformer (TFT) model provides rich interpretability throu
 <br><b>Encoder Visualization</b>
 </td>
 <td align="center" width="33%">
-<img src="results/TSLA_TFT_baseline_variable_importance_20250928_130820.png" width="250">
+<img src="results/TSLA_TFT_baseline_variable_importance.png" width="250">
 <br><b>Variable Importance</b>
 </td>
 </tr>
@@ -259,7 +259,7 @@ The Temporal Fusion Transformer (TFT) model provides rich interpretability throu
 <br><b>Encoder Visualization</b>
 </td>
 <td align="center" width="33%">
-<img src="results/TSLA_TFT_sentiment_variable_importance_20250928_142923.png" width="250">
+<img src="results/TSLA_TFT_with_reddit_sentiment_variable_importance.png" width="250">
 <br><b>Variable Importance</b>
 </td>
 </tr>
@@ -369,6 +369,12 @@ We added a log1p(volume) + RobustScaler (fit on the 96-day train window starting
 | TFT Baseline | 96 days from `train_start` (default 2025-02-01) | 5 days | `data/interim/TSLA_price_full.csv` |
 | TFT + Reddit Sentiment | 96 days from `train_start` (default 2025-02-01) | 5 days | `data/processed/tsla_price_sentiment_spike_merged_20220721_20250915.csv` (fallback: `data/processed/tsla_price_sentiment_spike.csv`) |
 
+Latest aligned window when train_start = 2025-02-01 (TSLA):
+
+| train_start | train_end | train_rows | test_start | test_end | test_rows |
+|---|---|---:|---|---|--:|
+| 2025-02-03 | 2025-06-20 | 96 | 2025-06-23 | 2025-06-27 | 5 |
+
 ### NVDA
 | Model | Train window (default) | Test horizon (default) | Data file(s) |
 |---|---|---|---|
@@ -376,7 +382,13 @@ We added a log1p(volume) + RobustScaler (fit on the 96-day train window starting
 | TimesFM | 96 days (last window or from `train_start`) | 5 days | `data/NVDA_close.csv` |
 | Chronos | 96 days (last window or from `train_start`) | 5 days | `data/NVDA_close.csv` |
 | TFT Baseline | 96 days from `train_start` (default 2025-02-01) | 5 days | `data/processed/NVDA_price_full.csv` |
-| TFT + Reddit Sentiment | 96 days from `train_start` (default 2025-02-01) | 5 days | `data/processed/nvda_price_sentiment_spike_merged_20250203_20250717.csv` |## Training/Test Windows and Data Files
+| TFT + Reddit Sentiment | 96 days from `train_start` (default 2025-02-01) | 5 days | `data/processed/nvda_price_sentiment_spike_merged_20250203_20250717.csv` |
+
+Latest aligned window when train_start = 2025-02-01 (NVDA):
+
+| train_start | train_end | train_rows | test_start | test_end | test_rows |
+|---|---|---:|---|---|--:|
+| 2025-02-03 | 2025-06-20 | 96 | 2025-06-23 | 2025-06-27 | 5 |
 
 
 ## Project structure
