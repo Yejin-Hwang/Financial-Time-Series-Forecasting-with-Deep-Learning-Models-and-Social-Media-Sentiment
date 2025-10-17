@@ -44,6 +44,8 @@ def get_user_input():
     try:
         df_path = _resolve_tsla_csv_path()
         df = pd.read_csv(df_path)
+        # Normalize column names to lowercase (handle 'Date' -> 'date')
+        df.columns = [str(c).lower() for c in df.columns]
         df["date"] = pd.to_datetime(df["date"])
         min_date = df["date"].min()
         max_date = df["date"].max()

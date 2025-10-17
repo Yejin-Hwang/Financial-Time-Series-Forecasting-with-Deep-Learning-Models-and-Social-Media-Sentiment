@@ -32,6 +32,8 @@ def _resolve_nvda_csv_path() -> str:
 
 def _load_data(ticker: str = 'NVDA') -> pd.DataFrame:
     df = pd.read_csv(_resolve_nvda_csv_path())
+    # Normalize column names to lowercase (handle 'Date' -> 'date')
+    df.columns = [str(c).lower() for c in df.columns]
     if 'date' not in df or 'close' not in df:
         raise ValueError("CSV must contain 'date' and 'close' columns")
     df['date'] = pd.to_datetime(df['date'])

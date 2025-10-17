@@ -105,6 +105,8 @@ def _resolve_nvda_csv_path() -> str:
 def _load_data(ticker: str = "NVDA") -> pd.DataFrame:
     df_path = _resolve_nvda_csv_path()
     df = pd.read_csv(df_path)
+    # Normalize column names to lowercase (handle 'Date' -> 'date')
+    df.columns = [str(c).lower() for c in df.columns]
     if "date" not in df.columns:
         raise ValueError("CSV must contain a 'date' column")
     if "close" not in df.columns:

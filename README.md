@@ -91,43 +91,50 @@ The period can be daily, hourly, etc. Some sources also provide Adjusted Close (
 ## Top Results
 
 ### TSLA Results
-Aggregate results on **TSLA** (lower is better), from `results/result_matrix_tsla.csv`:
+Aggregate results on **TSLA** (lower is better), from `results/result_matrix.csv` (includes DA):
 
-| Model         |    MAE |     MSE |   RMSE |  MAPE |
-|---------------|-------:|--------:|-------:|------:|
-| ARIMA         |  18.95 |  371.01 |  19.26 |  6.04 |
-| TimesFM       |  23.23 |  583.64 |  24.16 |  7.39 |
-| Chronos       |  13.21 |  185.30 |  13.61 |  4.17 |
-| TFT_baseline  |   9.86 |  101.50 |  10.07 |  3.12 |
-| **TFT_Reddit**|  **2.78** |  **11.12** |  **3.33** |  **0.88** |
+| Model         |   MAE |    MSE |  RMSE | MAPE |   DA |
+|---------------|------:|-------:|------:|-----:|-----:|
+| ARIMA         | 16.27 | 343.83 | 18.54 | 4.74 | 1.00 |
+| TimesFM       | 18.32 | 392.21 | 19.80 | 5.35 | 0.00 |
+| Chronos       |  7.10 |  70.67 |  8.41 | 4.59 | 0.00 |
+| TFT_baseline  |  5.20 |  29.72 |  5.45 | 1.55 | 1.00 |
+| **TFT_Reddit**| **3.00** | **10.61** | **3.26** | **0.89** | **1.00** |
 
-- Winner: **TFT_Reddit** (TFT + Reddit sentiment & spike features) with RMSE ≈ 0.47 and MAPE ≈ 0.26%.
+- Winner: **TFT_Reddit** (TFT + Reddit sentiment & spike features).
 
 ### NVDA Results
-Aggregate results on **NVDA** (lower is better), from `results/result_matrix_nvda.csv`:
+Aggregate results on **NVDA** (lower is better), from `results/result_matrix_nvda.csv` (includes DA):
 
-| Model         |    MAE |     MSE |   RMSE |  MAPE |
-|---------------|-------:|--------:|-------:|------:|
-| ARIMA         |   4.97 |   43.68 |   6.61 |  3.26 |
-| TimesFM       |   6.82 |   68.19 |   8.26 |  4.50 |
-| Chronos       |   7.10 |   70.67 |   8.41 |  4.59 |
-| TFT_baseline  |   1.90 |    3.92 |   1.98 |  1.32 |
-| **TFT_Reddit**|  **0.52** |   **0.37** |  **0.61** |  **0.36** |
+| Model         |  MAE |   MSE |  RMSE | MAPE |   DA |
+|---------------|-----:|------:|------:|-----:|-----:|
+| ARIMA         | 4.97 | 43.68 |  6.61 | 3.26 | 0.00 |
+| TimesFM       | 6.82 | 68.19 |  8.26 | 4.50 | 0.00 |
+| Chronos       | 7.10 | 70.67 |  8.41 | 4.59 | 0.00 |
+| TFT_baseline  | 14.21|206.40 | 14.37 | 9.36 | 0.00 |
+| **TFT_Reddit**| **1.57** | **3.02** | **1.74** | **1.04** | **1.00** |
 
-- Winner: **TFT_Reddit** (TFT + Reddit sentiment & spike features) with RMSE ≈ 0.61 and MAPE ≈ 0.36%.
+- Winner: **TFT_Reddit** (TFT + Reddit sentiment & spike features).
+
+### Directional Accuracy (DA) insights
+
+- **TSLA**: ARIMA, TFT_baseline, and TFT_Reddit achieve DA ≈ 1.0; TimesFM and Chronos ≈ 0.0.
+- **NVDA**: Only TFT_Reddit achieves DA ≈ 1.0; ARIMA/TimesFM/Chronos/TFT_baseline ≈ 0.0.
+- **Takeaway**: Reddit sentiment + spike features substantially improve getting the direction of daily moves right, especially for NVDA where baseline models fail on DA.
 
 ### Cross-Stock Performance Comparison
 
 | Model         | TSLA RMSE | NVDA RMSE | TSLA MAPE | NVDA MAPE | Performance |
 |---------------|----------:|----------:|----------:|----------:|-------------|
-| ARIMA         |     19.26 |      6.61 |      6.04 |      3.26 | NVDA better |
-| TimesFM       |     24.16 |      8.26 |      7.39 |      4.50 | NVDA better |
-| Chronos       |     13.61 |      8.41 |      4.17 |      4.59 | NVDA better |
-| TFT_baseline  |     10.07 |      1.98 |      3.12 |      1.32 | NVDA better |
-| TFT_Reddit    |      3.33 |      0.61 |      0.88 |      0.36 | NVDA better |
+| ARIMA         |     18.54 |      6.61 |      4.74 |      3.26 | NVDA better |
+| TimesFM       |     19.80 |      8.26 |      5.35 |      4.50 | NVDA better |
+| Chronos       |      8.41 |      8.41 |      4.59 |      4.59 | Tie |
+| TFT_baseline  |      5.45 |     14.37 |      1.55 |      9.36 | TSLA better |
+| TFT_Reddit    |      3.26 |      1.74 |      0.89 |      1.04 | Mixed |
 
 **Key Insights:**
-- **TFT_Reddit** achieves exceptional accuracy on both stocks (MAPE < 0.5%)
+- **TFT_Reddit** delivers very low errors on both stocks with high DA (≈1.0)
+
 
 ## 📈 Sentiment-Enhanced TFT Improvement Analysis
 
@@ -135,8 +142,8 @@ This section highlights the **relative performance gain** achieved by integratin
 
 | Model | TSLA RMSE | ΔRMSE vs Baseline | TSLA MAPE | ΔMAPE vs Baseline | NVDA RMSE | ΔRMSE vs Baseline | NVDA MAPE | ΔMAPE vs Baseline |
 |:------|-----------:|------------------:|-----------:|------------------:|-----------:|------------------:|-----------:|------------------:|
-| **TFT_baseline** | 10.07 | — | 3.12 | — | 1.98 | — | 1.32 | — |
-| **TFT_Reddit** | **3.33** | **−66.9%** | **0.88** | **−71.8%** | **0.61** | **−69.2%** | **0.36** | **−72.7%** |
+| **TFT_baseline** | 5.45 | — | 1.55 | — | 14.37 | — | 9.36 | — |
+| **TFT_Reddit** | **3.26** | **−40.2%** | **0.89** | **−42.6%** | **1.74** | **−87.9%** | **1.04** | **−88.9%** |
 
 ---
 
@@ -151,8 +158,8 @@ The figure below visualizes the relative error reduction (%) achieved by the sen
 ### 🧠 Key Insights
 
 - **Sentiment integration** dramatically reduces forecasting errors for both stocks.  
-- For **TSLA**, RMSE ↓ **66.9%**, MAPE ↓ **71.8%** compared to the baseline TFT.  
-- For **NVDA**, RMSE ↓ **69.2%**, MAPE ↓ **72.7%**, indicating more stable and accurate forecasts.  
+- For **TSLA**, RMSE ↓ **40.2%**, MAPE ↓ **42.6%** compared to the baseline TFT.  
+- For **NVDA**, RMSE ↓ **87.9%**, MAPE ↓ **88.9%**, indicating more stable and accurate forecasts.  
 - The improvement demonstrates that **Reddit-derived sentiment embeddings** effectively capture short-term investor mood shifts overlooked by traditional temporal features.
 
 > 🗒️ *Unlike the earlier cross-stock comparison focusing on absolute metrics, this section emphasizes the **relative improvement** within the same model architecture (TFT) achieved through sentiment enhancement.*
@@ -164,16 +171,16 @@ Parsed from execution time matrices (lower is faster; values vary by run/hardwar
 
 | Model                      | TSLA Time (s) | NVDA Time (s) |
 |----------------------------|--------------:|--------------:|
-| ARIMA                      |          6.86 |         14.23 |
-| TimesFM                    |         20.48 |         30.04 |
-| Chronos                    |          9.72 |         12.91 |
-| TFT_baseline               |         33.81 |        133.08 |
-| TFT_with_Reddit_Sentiment  |         66.98 |         45.93 |
+| ARIMA                      |         17.49 |          9.84 |
+| TimesFM                    |        133.14 |         24.56 |
+| Chronos                    |         24.96 |         13.56 |
+| TFT_baseline               |         42.19 |         49.90 |
+| TFT_with_Reddit_Sentiment  |        443.30 |        216.66 |
 
 **Performance Notes:**
-- NVDA models generally take longer to train (especially TFT_baseline: 133s vs 34s)
-- TFT_with_Reddit_Sentiment is faster on NVDA (46s vs 67s) due to different data characteristics
-- ARIMA and Chronos show consistent performance across both stocks
+- NVDA is faster for ARIMA, TimesFM, Chronos, and sentiment-enhanced TFT.
+- TFT_baseline is slightly slower on NVDA (~49.9s) than TSLA (~42.2s).
+- Training times vary by run and hardware.
 
 ## Results Visualizations
 
@@ -183,27 +190,27 @@ Parsed from execution time matrices (lower is faster; values vary by run/hardwar
 <tr>
 <td align="center" width="50%">
 <img src="results/TSLA_ARIMA_forecast.png" width="375">
-<br><b>ARIMA</b><br>RMSE: 19.26
+<br><b>ARIMA</b><br>RMSE: 18.54
 </td>
 <td align="center" width="50%">
 <img src="results/TSLA_TimesFM_forecast.png" width="375">
-<br><b>TimesFM</b><br>RMSE: 24.16
+<br><b>TimesFM</b><br>RMSE: 19.80
 </td>
 </tr>
 <tr>
 <td align="center" width="50%">
 <img src="results/TSLA_Chronos_forecast.png" width="375">
-<br><b>Chronos</b><br>RMSE: 18.22
+<br><b>Chronos</b><br>RMSE: 8.41
 </td>
 <td align="center" width="50%">
 <img src="results/TSLA_TFT_baseline_forecast.png" width="375">
-<br><b>TFT Baseline</b><br>RMSE: 10.84
+<br><b>TFT Baseline</b><br>RMSE: 5.45
 </td>
 </tr>
 <tr>
 <td align="center" width="50%">
-<img src="results/TSLA_TFT_with_reddit_sentiment_forecast_2.png" width="375">
-<br><b>TFT with Reddit Sentiment</b><br>RMSE: 3.33 ⭐
+<img src="results/TSLA_TFT_with_reddit_sentiment_forecast.png" width="375">
+<br><b>TFT with Reddit Sentiment</b><br>RMSE: 3.26 ⭐
 </td>
 <td align="center" width="50%">
 </td>
@@ -278,13 +285,13 @@ The Temporal Fusion Transformer (TFT) model provides rich interpretability throu
 </td>
 <td align="center" width="50%">
 <img src="results/NVDA_TFT_baseline_forecast.png" width="375">
-<br><b>TFT Baseline</b><br>RMSE: 1.98
+<br><b>TFT Baseline</b><br>RMSE: 14.37
 </td>
 </tr>
 <tr>
 <td align="center" width="50%">
 <img src="results/NVDA_TFT_with_reddit_sentiment_forecast.png" width="375">
-<br><b>TFT with Reddit Sentiment</b><br>RMSE: 0.61 ⭐
+<br><b>TFT with Reddit Sentiment</b><br>RMSE: 1.74 ⭐
 </td>
 <td align="center" width="50%">
 </td>
@@ -350,6 +357,27 @@ We added a log1p(volume) + RobustScaler (fit on the 96-day train window starting
 - before: `data/processed/tsla_price_sentiment_spike.csv`
 - after: `data/processed/tsla_price_sentiment_spike_norm.csv` (preferred if present)
 - seed=42, other hyperparameters unchanged.
+
+## Training/Test Windows and Data Files
+
+### TSLA
+| Model | Train window (default) | Test horizon (default) | Data file(s) |
+|---|---|---|---|
+| ARIMA | User-chosen (≈96 rows suggested) | 5 days | `data/TSLA_close.csv` |
+| TimesFM | 96 days (last window or from `train_start`) | 5 days | `data/TSLA_close.csv` |
+| Chronos | 96 days (last window or from `train_start`) | 5 days | `data/TSLA_close.csv` |
+| TFT Baseline | 96 days from `train_start` (default 2025-02-01) | 5 days | `data/interim/TSLA_price_full.csv` |
+| TFT + Reddit Sentiment | 96 days from `train_start` (default 2025-02-01) | 5 days | `data/processed/tsla_price_sentiment_spike_merged_20220721_20250915.csv` (fallback: `data/processed/tsla_price_sentiment_spike.csv`) |
+
+### NVDA
+| Model | Train window (default) | Test horizon (default) | Data file(s) |
+|---|---|---|---|
+| ARIMA | User-chosen (≈96 rows suggested) | 5 days | `data/NVDA_close.csv` |
+| TimesFM | 96 days (last window or from `train_start`) | 5 days | `data/NVDA_close.csv` |
+| Chronos | 96 days (last window or from `train_start`) | 5 days | `data/NVDA_close.csv` |
+| TFT Baseline | 96 days from `train_start` (default 2025-02-01) | 5 days | `data/processed/NVDA_price_full.csv` |
+| TFT + Reddit Sentiment | 96 days from `train_start` (default 2025-02-01) | 5 days | `data/processed/nvda_price_sentiment_spike_merged_20250203_20250717.csv` |## Training/Test Windows and Data Files
+
 
 ## Project structure
 

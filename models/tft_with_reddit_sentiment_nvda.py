@@ -169,8 +169,9 @@ def load_and_prepare_data(file_path="nvda_price_sentiment_spike_merged_20250203_
         if 'days_since_earning' not in df.columns:
             df['days_since_earning'] = 0
 
-        # Fill any NaNs introduced by lag/rolling
-        df = df.fillna(method='ffill').fillna(method='bfill')
+        # Fill any NaNs introduced by lag/rolling (do not alter target 'close')
+        cols_safe = [c for c in df.columns if c not in ('close', 'date')]
+        df[cols_safe] = df[cols_safe].fillna(method='ffill').fillna(method='bfill')
         
         # Display data info
         print("\nData columns:")
