@@ -732,10 +732,10 @@ def create_standalone_plot(predictions, actuals, config, df=None):
         
         plt.title(title, fontsize=14, fontweight='bold')
         plt.legend(fontsize=10)
-        # Clamp x-axis numerically to full index range (business-day axis)
-        max_x = len(x_train) + len(x_pred)
-        if max_x > 1:
-            plt.xlim(0, max_x - 1)
+        # Clamp x-axis to a consistent window length (96 + prediction_days) for visual alignment
+        align_right = len(x_train) + int(config.get('prediction_days', 5)) - 1
+        if align_right >= len(x_train):
+            plt.xlim(0, align_right)
         
     else:
         # Fallback without dates
