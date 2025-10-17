@@ -111,7 +111,7 @@ def get_user_config():
 # 4. Data Loading and Preparation
 # =============================================================================
 
-def load_and_prepare_data(file_path="tsla_price_sentiment_spike.csv", config=None):
+def load_and_prepare_data(file_path="tsla_price_sentiment_spike_merged_20220721_20250915.csv", config=None):
     """Load and prepare data for TFT model"""
     import pandas as pd
     
@@ -122,8 +122,22 @@ def load_and_prepare_data(file_path="tsla_price_sentiment_spike.csv", config=Non
         print(f"✓ Data loaded successfully from {file_path}")
         print(f"  - Shape: {df.shape}")
         
+        # --- Schema normalization (robust to casing/prefix differences) ---
+        # 1) normalize column names to lower snake-ish
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        #    if case-folding produced duplicates (e.g., 'Date' and 'date'), keep first
+        if df.columns.duplicated().any():
+            df = df.loc[:, ~df.columns.duplicated()].copy()
+
+        # 2) date handling
+        if 'date' not in df.columns:
+            # try common fallbacks
+            for cand in ('datetime', 'timestamp', 'created', 'day'):
+                if cand in df.columns:
+                    df['date'] = pd.to_datetime(df[cand], errors='coerce', utc=True).dt.tz_localize(None).dt.floor('D')
+                    break
         # Convert date column to datetime and sort
-        df['date'] = pd.to_datetime(df['date'], errors='coerce', utc=True).dt.tz_localize(None)
+        df['date'] = pd.to_datetime(df.get('date'), errors='coerce', utc=True).dt.tz_localize(None)
         df = df.sort_values('date').reset_index(drop=True)
         print(f"  - Date range: {df['date'].min().strftime('%Y-%m-%d')} to {df['date'].max().strftime('%Y-%m-%d')}")
         
@@ -545,19 +559,39 @@ def evaluate_performance(predictions, actuals):
     import torch as _torch
     mape = (_torch.abs((actuals_cpu - predictions_cpu) / actuals_cpu)).mean().mul(100).item()
     
+    # Directional Accuracy (robust)
+    import numpy as _np
+    try:
+        y_true_np = actuals_cpu.detach().cpu().numpy().astype(float).ravel()
+        y_pred_np = predictions_cpu.detach().cpu().numpy()
+        if y_pred_np.ndim > 1:
+            y_pred_np = y_pred_np[0]
+        y_pred_np = _np.asarray(y_pred_np, dtype=float).ravel()
+        min_len = int(min(len(y_true_np), len(y_pred_np)))
+        if min_len >= 2:
+            yt = y_true_np[:min_len]
+            yp = y_pred_np[:min_len]
+            da = float((_np.sign(yp[1:] - yt[:-1]) == _np.sign(yt[1:] - yt[:-1])).mean())
+        else:
+            da = float('nan')
+    except Exception:
+        da = float('nan')
+
     # Create performance metrics DataFrame
     metrics_df = pd.DataFrame({
         'Metric': [
             'MAE',
             'MSE',
             'RMSE',
-            'MAPE'
+            'MAPE',
+            'DA'
         ],
         'Value': [
             f'{mae:.4f}',
             f'{mse:.4f}',
             f'{rmse:.4f}',
-            f'{mape:.4f}'
+            f'{mape:.4f}',
+            f'{da:.4f}'
         ]
     })
     
@@ -569,6 +603,7 @@ def evaluate_performance(predictions, actuals):
         'MSE': mse,
         'RMSE': rmse,
         'MAPE': mape,
+        'DA': da,
     }
 
 # =============================================================================
@@ -788,10 +823,13 @@ def save_results_and_update_matrix(performance_metrics, config):
                 matrix = pickle.load(f)
         else:
             # Create new matrix if it doesn't exist
-            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE', 'DA'])
         # Ensure MAPE column exists
-        if 'MAPE' not in matrix.columns:
-            matrix = matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+        desired_cols = ['MAE', 'MSE', 'RMSE', 'MAPE', 'DA']
+        for c in desired_cols:
+            if c not in matrix.columns:
+                matrix[c] = pd.NA
+        matrix = matrix.reindex(columns=desired_cols)
         # Normalize legacy row keys
         try:
             if 'chronos' in matrix.index:
@@ -810,7 +848,8 @@ def save_results_and_update_matrix(performance_metrics, config):
             performance_metrics['MAE'],
             performance_metrics['MSE'],
             performance_metrics['RMSE'],
-            float(performance_metrics.get('MAPE', 0.0))
+            float(performance_metrics.get('MAPE', 0.0)),
+            performance_metrics.get('DA', None)
         ]
         
         # Save updated matrix to pickle
@@ -823,9 +862,12 @@ def save_results_and_update_matrix(performance_metrics, config):
             if os.path.exists(csv_path):
                 global_matrix = pd.read_csv(csv_path, index_col=0)
             else:
-                global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
-            if 'MAPE' not in global_matrix.columns:
-                global_matrix = global_matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+                global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE', 'DA'])
+            desired_cols = ['MAE', 'MSE', 'RMSE', 'MAPE', 'DA']
+            for c in desired_cols:
+                if c not in global_matrix.columns:
+                    global_matrix[c] = pd.NA
+            global_matrix = global_matrix.reindex(columns=desired_cols)
             # Normalize legacy row keys
             if 'chronos' in global_matrix.index:
                 global_matrix = global_matrix.rename(index={'chronos': 'Chronos'})
@@ -838,7 +880,8 @@ def save_results_and_update_matrix(performance_metrics, config):
                 performance_metrics['MAE'],
                 performance_metrics['MSE'],
                 performance_metrics['RMSE'],
-                float(performance_metrics.get('MAPE', 0.0))
+                float(performance_metrics.get('MAPE', 0.0)),
+                performance_metrics.get('DA', None)
             ]
             # Reorder rows
             desired_order = ['ARIMA', 'TimesFM', 'Chronos', 'TFT_baseline', 'TFT_Reddit']
@@ -909,7 +952,7 @@ def main():
     # Load and prepare data
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     # Prefer normalized dataset if available
-    norm_path = os.path.join(project_root, "data", "processed", "tsla_price_sentiment_spike_norm.csv")
+    norm_path = os.path.join(project_root, "data", "processed", "tsla_price_sentiment_spike_merged_20220721_20250915.csv")
     raw_path = os.path.join(project_root, "data", "processed", "tsla_price_sentiment_spike.csv")
     data_path = norm_path if os.path.exists(norm_path) else raw_path
     df = load_and_prepare_data(data_path, config)

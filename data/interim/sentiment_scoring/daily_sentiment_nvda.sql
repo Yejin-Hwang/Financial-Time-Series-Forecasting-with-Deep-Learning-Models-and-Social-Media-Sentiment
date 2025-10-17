@@ -1,3 +1,19 @@
+
+select * from nvda_sentiment limit 20;
+
+select date,sentiment,sentiment_score from nvda_sentiment;
+
+alter table nvda_sentiment Add column new_score float;
+
+update nvda_sentiment
+set new_score = 
+    case when sentiment = 'positive' then 1
+         when sentiment = 'negative' then -1
+         else sentiment_score
+    end;
+
+select date, avg(new_score) as daily_sentiment from nvda_sentiment group by date order by date desc;
+
 alter table nvda_price add daily_sentiment float
 
 UPDATE nvda_price p
@@ -51,5 +67,3 @@ FROM (
     FROM nvda_price_sentiment
 ) sub
 WHERE p.ctid = sub.ctid;
-
-

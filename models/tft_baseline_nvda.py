@@ -586,32 +586,53 @@ def evaluate_performance(predictions, actuals):
     
     # Calculate MAPE as Python float to avoid tensor prints
     mape = (torch.abs((actuals_cpu - predictions_cpu) / actuals_cpu)).mean().mul(100).item()
-    
-    # Create performance summary
+
+    # Directional Accuracy (robust 1D computation)
+    import numpy as _np
+    try:
+        y_true_np = actuals_cpu.detach().cpu().numpy().astype(float).ravel()
+        y_pred_np = predictions_cpu.detach().cpu().numpy()
+        if y_pred_np.ndim > 1:
+            y_pred_np = y_pred_np[0]
+        y_pred_np = _np.asarray(y_pred_np, dtype=float).ravel()
+        min_len = int(min(len(y_true_np), len(y_pred_np)))
+        if min_len >= 2:
+            yt = y_true_np[:min_len]
+            yp = y_pred_np[:min_len]
+            da = float((_np.sign(yp[1:] - yt[:-1]) == _np.sign(yt[1:] - yt[:-1])).mean())
+        else:
+            da = float('nan')
+    except Exception:
+        da = float('nan')
+
+    # Printable table
     performance_metrics = {
         'Metric': [
             'MAE (Mean Absolute Error)',
             'MSE (Mean Squared Error)',
             'RMSE (Root Mean Squared Error)',
-            'MAPE (Mean Absolute Percentage Error)'
+            'MAPE (Mean Absolute Percentage Error)',
+            'DA (Directional Accuracy)'
         ],
         'Value': [
             f'{mae:.4f}',
             f'{mse:.4f}',
             f'{rmse:.4f}',
-            f'{mape:.4f}'
+            f'{mape:.4f}',
+            f'{da:.4f}'
         ]
     }
-    
+
     metrics_df = pd.DataFrame(performance_metrics)
     print("\n📊 Model Performance Metrics:")
     print(metrics_df)
-    
+
     return {
         'mae': mae,
         'mse': mse,
         'rmse': rmse,
-        'mape': mape
+        'mape': mape,
+        'da': da
     }
 
 # =============================================================================
@@ -818,7 +839,7 @@ def save_results_and_update_matrix(performance_metrics, config):
     
     print("\n=== Saving Results ===")
     
-    # Create results summary
+    # Create results summary (include DA)
     results_summary = {
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'training_days': config['training_days'],
@@ -829,7 +850,8 @@ def save_results_and_update_matrix(performance_metrics, config):
         'mae': performance_metrics['mae'],
         'mse': performance_metrics['mse'],
         'rmse': performance_metrics['rmse'],
-        'mape': performance_metrics['mape']
+        'mape': performance_metrics['mape'],
+        'da': performance_metrics.get('da', float('nan'))
         
     }
     
@@ -858,15 +880,22 @@ def save_results_and_update_matrix(performance_metrics, config):
     except FileNotFoundError:
         print("⚠️  No existing results matrix found. Creating new one...")
         # Create new matrix if none exists
-        matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+        matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE', 'DA'])
 
     # Add TFT model results (standardized key)
     print("\nAdding TFT model results...")
+    # Ensure DA column exists and order
+    desired_cols = ['MAE', 'MSE', 'RMSE', 'MAPE', 'DA']
+    for c in desired_cols:
+        if c not in matrix.columns:
+            matrix[c] = pd.NA
+    matrix = matrix.reindex(columns=desired_cols)
     matrix.loc["TFT_baseline"] = [
         performance_metrics['mae'], 
         performance_metrics['mse'], 
         performance_metrics['rmse'],
-        performance_metrics['mape']
+        performance_metrics['mape'],
+        performance_metrics.get('da', float('nan'))
     ]
     
     print("\nUpdated matrix:")
@@ -881,14 +910,18 @@ def save_results_and_update_matrix(performance_metrics, config):
         if os.path.exists(csv_path):
             global_matrix = pd.read_csv(csv_path, index_col=0)
         else:
-            global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
-        if 'MAPE' not in global_matrix.columns:
-            global_matrix = global_matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+            global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE', 'DA'])
+        desired_cols = ['MAE', 'MSE', 'RMSE', 'MAPE', 'DA']
+        for c in desired_cols:
+            if c not in global_matrix.columns:
+                global_matrix[c] = pd.NA
+        global_matrix = global_matrix.reindex(columns=desired_cols)
         global_matrix.loc['TFT_baseline'] = [
             performance_metrics['mae'],
             performance_metrics['mse'],
             performance_metrics['rmse'],
-            performance_metrics['mape']
+            performance_metrics['mape'],
+            performance_metrics.get('da', float('nan'))
         ]
         desired_order = ['ARIMA', 'TimesFM', 'Chronos', 'TFT_baseline', 'TFT_Reddit']
         ordered = [i for i in desired_order if i in global_matrix.index]
@@ -952,7 +985,7 @@ def main():
     # Build dataset path from project root and load data
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     processed_dir = os.path.join(project_root, 'data', 'processed')
-    data_path = os.path.join(processed_dir, 'NVDA_full_features.csv')
+    data_path = os.path.join(processed_dir, 'NVDA_price_full.csv')
     print(f"Using data file: {data_path}")
     df = load_and_prepare_data(file_path=data_path, config=config)
     print("\nFirst few rows:")

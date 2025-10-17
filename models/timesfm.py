@@ -94,21 +94,16 @@ def get_user_input() -> tuple[str, int]:
 
 
 def _resolve_tsla_csv_path() -> str:
-    """Resolve path to TSLA_close.csv across common project locations."""
+    """Resolve path to data/TSLA_close.csv strictly under project root."""
     base_dir = Path(__file__).resolve().parent.parent  # project root
-    candidates = [
-        base_dir / "data" / "processed" / "tsla_price_sentiment_spike.csv",
-        base_dir / "data" / "processed" / "TSLA_full_features.csv",
-        Path("TSLA_close.csv"),
-        base_dir / "data" / "TSLA_close.csv",
-        base_dir / "data" / "raw" / "TSLA_close.csv",
-        Path.cwd() / "data" / "TSLA_close.csv",
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            return str(candidate)
-    searched = "\n    ".join(str(p) for p in candidates)
-    raise FileNotFoundError(f"Can't find TSLA_close.csv. Searched:\n    {searched}")
+    target = base_dir / "data" / "TSLA_close.csv"
+    if target.exists():
+        return str(target)
+    # Conservative single fallback: cwd/data/TSLA_close.csv
+    alt = Path.cwd() / "data" / "TSLA_close.csv"
+    if alt.exists():
+        return str(alt)
+    raise FileNotFoundError(f"Can't find required file: {target}")
 
 
 def _load_data(ticker: str = "TSLA") -> pd.DataFrame:
@@ -238,20 +233,20 @@ def _plot_results(df_train: pd.DataFrame, df_test: pd.DataFrame, forecast_df: pd
     # Plot training data with TFT-style colors
     plt.plot(df_train["date"], df_train["close"], label="Training Data (Close Price)", color="blue", linewidth=2, alpha=0.7)
 
-    # Median prediction
+    # Median prediction (align x-axis to df_test dates to avoid weekend/offset mismatch)
     if "timesfm" in forecast_df.columns:
-        plt.plot(forecast_df["ds"], forecast_df["timesfm"], label="Predictions", color="red", linewidth=3, linestyle="--", marker="o", markersize=8)
+        y_pred = forecast_df["timesfm"].to_numpy()
+        k = min(len(y_pred), len(df_test))
+        x_pred = pd.to_datetime(df_test["date"].iloc[:k])
+        plt.plot(x_pred, y_pred[:k], label="Predictions", color="red", linewidth=3, linestyle="--", marker="o", markersize=8)
 
     # Prediction interval (10-90%)
     if 'timesfm-q-0.1' in forecast_df.columns and 'timesfm-q-0.9' in forecast_df.columns:
-        plt.fill_between(
-            forecast_df["ds"],
-            forecast_df['timesfm-q-0.1'],
-            forecast_df['timesfm-q-0.9'],
-            color="red",
-            alpha=0.2,
-            label="10-90% Prediction Interval",
-        )
+        ql = forecast_df['timesfm-q-0.1'].to_numpy()
+        qh = forecast_df['timesfm-q-0.9'].to_numpy()
+        kq = min(len(ql), len(df_test))
+        xq = pd.to_datetime(df_test["date"].iloc[:kq])
+        plt.fill_between(xq, ql[:kq], qh[:kq], color="red", alpha=0.2, label="10-90% Prediction Interval")
 
     # Actual test data
     if not df_test.empty:
@@ -316,19 +311,33 @@ def _evaluate(df_test: pd.DataFrame, forecast_df: pd.DataFrame) -> tuple[float, 
     # Calculate MAPE (Mean Absolute Percentage Error) with zero guard
     eps = 1e-8
     mape = float(np.mean(np.abs((y_true - y_pred) / np.clip(np.abs(y_true), eps, None))) * 100.0)
+    # Directional accuracy vs previous true close
+    try:
+        if len(y_true) > 1 and len(y_pred) > 1:
+            da = float((np.sign(y_pred[1:] - y_true[:-1]) == np.sign(y_true[1:] - y_true[:-1])).mean())
+        else:
+            da = float('nan')
+    except Exception:
+        da = float('nan')
 
     print("Forecast Performance Metrics:")
     print(f"MAE:  {mae:.2f}")
     print(f"MSE:  {mse:.2f}")
     print(f"RMSE: {rmse:.2f}")
     print(f"MAPE: {mape:.2f}%")
-    return mae, mse, rmse, mape
+    print(f"DA:   {da:.3f}")
+    return mae, mse, rmse, mape, da
 
 
-def _save_results_matrix(ticker: str, metrics: tuple[float, float, float, float] | None) -> None:
+def _save_results_matrix(ticker: str, metrics: tuple | None) -> None:
     if metrics is None:
         return
-    mae, mse, rmse, mape = metrics
+    # Backward-compatible unpacking (DA optional)
+    try:
+        mae, mse, rmse, mape, da = metrics
+    except Exception:
+        mae, mse, rmse, mape = metrics
+        da = float('nan')
     # Ensure results dir exists
     results_dir = Path(__file__).resolve().parent.parent / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -340,11 +349,18 @@ def _save_results_matrix(ticker: str, metrics: tuple[float, float, float, float]
             with open(pkl_path, "rb") as f:
                 matrix = pickle.load(f)
         else:
-            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE', 'DA'])
     except Exception:
-        matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+        matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE', 'DA'])
 
-    matrix.loc['TimesFM'] = [mae, mse, rmse, mape]
+    # Ensure DA column present
+    desired_cols = ['MAE', 'MSE', 'RMSE', 'MAPE', 'DA']
+    for c in desired_cols:
+        if c not in matrix.columns:
+            matrix[c] = pd.NA
+    matrix = matrix.reindex(columns=desired_cols)
+
+    matrix.loc['TimesFM'] = [mae, mse, rmse, mape, da]
     try:
         with open(pkl_path, "wb") as f:
             pickle.dump(matrix, f)
@@ -357,8 +373,14 @@ def _save_results_matrix(ticker: str, metrics: tuple[float, float, float, float]
         if csv_path.exists():
             global_matrix = pd.read_csv(csv_path, index_col=0)
         else:
-            global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE','MAPE'])
-        global_matrix.loc['TimesFM'] = [mae, mse, rmse,mape]
+            global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE','MAPE', 'DA'])
+        # Ensure DA column present
+        desired_cols = ['MAE', 'MSE', 'RMSE', 'MAPE', 'DA']
+        for c in desired_cols:
+            if c not in global_matrix.columns:
+                global_matrix[c] = pd.NA
+        global_matrix = global_matrix.reindex(columns=desired_cols)
+        global_matrix.loc['TimesFM'] = [mae, mse, rmse, mape, da]
         global_matrix.to_csv(csv_path)
         print("Results saved to matrix successfully!")
         print(global_matrix)

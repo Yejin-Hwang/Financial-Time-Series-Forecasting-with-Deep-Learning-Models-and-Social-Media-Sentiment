@@ -24,19 +24,14 @@ warnings.filterwarnings('ignore')
 
 def _resolve_tsla_csv_path() -> str:
     base_dir = Path(__file__).resolve().parent.parent
-    candidates = [
-        base_dir / 'data' / 'processed' / 'tsla_price_sentiment_spike.csv',
-        base_dir / 'data' / 'processed' / 'TSLA_full_features.csv',
-        Path('TSLA_close.csv'),
-        base_dir / 'data' / 'TSLA_close.csv',
-        base_dir / 'data' / 'raw' / 'TSLA_close.csv',
-        Path.cwd() / 'data' / 'TSLA_close.csv',
-    ]
-    for p in candidates:
-        if p.exists():
-            return str(p)
-    searched = "\n    ".join(str(p) for p in candidates)
-    raise FileNotFoundError(f"Can't find TSLA_close.csv. Searched:\n    {searched}")
+    target = base_dir / 'data' / 'TSLA_close.csv'
+    if target.exists():
+        return str(target)
+    # Conservative single fallback: cwd/data/TSLA_close.csv
+    alt = Path.cwd() / 'data' / 'TSLA_close.csv'
+    if alt.exists():
+        return str(alt)
+    raise FileNotFoundError(f"Can't find required file: {target}")
 
 
 def _load_data(ticker: str = 'TSLA') -> pd.DataFrame:
@@ -194,12 +189,21 @@ def main(
         rmse = float(np.sqrt(mse))
         eps = 1e-8
         mape = float(np.mean(np.abs((y_true - y_pred) / np.clip(np.abs(y_true), eps, None))) * 100.0)
+        # Directional Accuracy vs previous true close
+        try:
+            if len(y_true) > 1 and len(y_pred) > 1:
+                da = float((np.sign(y_pred[1:] - y_true[:-1]) == np.sign(y_true[1:] - y_true[:-1])).mean())
+            else:
+                da = float('nan')
+        except Exception:
+            da = float('nan')
         print('Forecast Performance Metrics:')
         print(f'MAE:  {mae:.2f}')
         print(f'MSE:  {mse:.2f}')
         print(f'RMSE: {rmse:.2f}')
         print(f'MAPE: {mape:.2f}%')
-        metrics = (mae, mse, rmse, mape)
+        print(f'DA:   {da:.3f}')
+        metrics = (mae, mse, rmse, mape, da)
 
     # Save results
     if metrics is not None:
@@ -213,11 +217,15 @@ def main(
                 with open(pkl_path, 'rb') as f:
                     matrix = pickle.load(f)
             else:
-                matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+                matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE', 'DA'])
         except Exception:
-            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
-        if 'MAPE' not in matrix.columns:
-            matrix = matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE', 'DA'])
+        # Ensure expected columns
+        desired_cols = ['MAE', 'MSE', 'RMSE', 'MAPE', 'DA']
+        for c in desired_cols:
+            if c not in matrix.columns:
+                matrix[c] = pd.NA
+        matrix = matrix.reindex(columns=desired_cols)
         matrix.loc['chronos'] = list(metrics)
         try:
             with open(pkl_path, 'wb') as f:
@@ -231,9 +239,12 @@ def main(
             if csv_path.exists():
                 global_matrix = pd.read_csv(csv_path, index_col=0)
             else:
-                global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
-            if 'MAPE' not in global_matrix.columns:
-                global_matrix = global_matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+                global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE', 'DA'])
+            desired_cols = ['MAE', 'MSE', 'RMSE', 'MAPE', 'DA']
+            for c in desired_cols:
+                if c not in global_matrix.columns:
+                    global_matrix[c] = pd.NA
+            global_matrix = global_matrix.reindex(columns=desired_cols)
             # Standardize key and reorder
             global_matrix.loc['Chronos'] = list(metrics)
             desired_order = ['ARIMA', 'TimesFM', 'Chronos', 'TFT_baseline', 'TFT_Reddit']

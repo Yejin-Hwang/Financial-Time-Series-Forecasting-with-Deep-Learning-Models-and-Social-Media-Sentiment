@@ -185,12 +185,21 @@ def main(
         rmse = float(np.sqrt(mse))
         eps = 1e-8
         mape = float(np.mean(np.abs((y_true - y_pred) / np.clip(np.abs(y_true), eps, None))) * 100.0)
+        # Directional Accuracy vs previous true close
+        try:
+            if len(y_true) > 1 and len(y_pred) > 1:
+                da = float((np.sign(y_pred[1:] - y_true[:-1]) == np.sign(y_true[1:] - y_true[:-1])).mean())
+            else:
+                da = float('nan')
+        except Exception:
+            da = float('nan')
         print('Forecast Performance Metrics:')
         print(f'MAE:  {mae:.2f}')
         print(f'MSE:  {mse:.2f}')
         print(f'RMSE: {rmse:.2f}')
         print(f'MAPE: {mape:.2f}%')
-        metrics = (mae, mse, rmse, mape)
+        print(f'DA:   {da:.3f}')
+        metrics = (mae, mse, rmse, mape, da)
 
     # Save results
     if metrics is not None:
@@ -204,11 +213,15 @@ def main(
                 with open(pkl_path, 'rb') as f:
                     matrix = pickle.load(f)
             else:
-                matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+                matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE', 'DA'])
         except Exception:
-            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
-        if 'MAPE' not in matrix.columns:
-            matrix = matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE', 'DA'])
+        # Ensure expected columns
+        desired_cols = ['MAE', 'MSE', 'RMSE', 'MAPE', 'DA']
+        for c in desired_cols:
+            if c not in matrix.columns:
+                matrix[c] = pd.NA
+        matrix = matrix.reindex(columns=desired_cols)
         matrix.loc['chronos'] = list(metrics)
         try:
             with open(pkl_path, 'wb') as f:
@@ -216,15 +229,18 @@ def main(
         except Exception as e:
             print(f'Failed to save per-ticker matrix: {e}')
 
-        # Global CSV
-        csv_path = results_dir / 'result_matrix.csv'
+        # Global CSV (NVDA-specific)
+        csv_path = results_dir / 'result_matrix_nvda.csv'
         try:
             if csv_path.exists():
                 global_matrix = pd.read_csv(csv_path, index_col=0)
             else:
-                global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
-            if 'MAPE' not in global_matrix.columns:
-                global_matrix = global_matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+                global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE', 'DA'])
+            desired_cols = ['MAE', 'MSE', 'RMSE', 'MAPE', 'DA']
+            for c in desired_cols:
+                if c not in global_matrix.columns:
+                    global_matrix[c] = pd.NA
+            global_matrix = global_matrix.reindex(columns=desired_cols)
             # Standardize key and reorder
             global_matrix.loc['Chronos'] = list(metrics)
             desired_order = ['ARIMA', 'TimesFM', 'Chronos', 'TFT_baseline', 'TFT_Reddit']

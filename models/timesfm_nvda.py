@@ -316,19 +316,33 @@ def _evaluate(df_test: pd.DataFrame, forecast_df: pd.DataFrame) -> tuple[float, 
     # Calculate MAPE (Mean Absolute Percentage Error) with zero guard
     eps = 1e-8
     mape = float(np.mean(np.abs((y_true - y_pred) / np.clip(np.abs(y_true), eps, None))) * 100.0)
+    # Directional accuracy vs previous true close
+    try:
+        if len(y_true) > 1 and len(y_pred) > 1:
+            da = float((np.sign(y_pred[1:] - y_true[:-1]) == np.sign(y_true[1:] - y_true[:-1])).mean())
+        else:
+            da = float('nan')
+    except Exception:
+        da = float('nan')
 
     print("Forecast Performance Metrics:")
     print(f"MAE:  {mae:.2f}")
     print(f"MSE:  {mse:.2f}")
     print(f"RMSE: {rmse:.2f}")
     print(f"MAPE: {mape:.2f}%")
-    return mae, mse, rmse, mape
+    print(f"DA:   {da:.3f}")
+    return mae, mse, rmse, mape, da
 
 
-def _save_results_matrix(ticker: str, metrics: tuple[float, float, float, float] | None) -> None:
+def _save_results_matrix(ticker: str, metrics: tuple | None) -> None:
     if metrics is None:
         return
-    mae, mse, rmse, mape = metrics
+    # Backward compatible unpacking (DA optional)
+    try:
+        mae, mse, rmse, mape, da = metrics
+    except Exception:
+        mae, mse, rmse, mape = metrics
+        da = float('nan')
     # Ensure results dir exists
     results_dir = Path(__file__).resolve().parent.parent / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -340,11 +354,18 @@ def _save_results_matrix(ticker: str, metrics: tuple[float, float, float, float]
             with open(pkl_path, "rb") as f:
                 matrix = pickle.load(f)
         else:
-            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+            matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE', 'DA'])
     except Exception:
-        matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+        matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE', 'DA'])
 
-    matrix.loc['TimesFM'] = [mae, mse, rmse, mape]
+    # Ensure DA column present
+    desired = ['MAE', 'MSE', 'RMSE', 'MAPE', 'DA']
+    for c in desired:
+        if c not in matrix.columns:
+            matrix[c] = pd.NA
+    matrix = matrix.reindex(columns=desired)
+
+    matrix.loc['TimesFM'] = [mae, mse, rmse, mape, da]
     try:
         with open(pkl_path, "wb") as f:
             pickle.dump(matrix, f)
@@ -357,8 +378,14 @@ def _save_results_matrix(ticker: str, metrics: tuple[float, float, float, float]
         if csv_path.exists():
             global_matrix = pd.read_csv(csv_path, index_col=0)
         else:
-            global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE','MAPE'])
-        global_matrix.loc['TimesFM'] = [mae, mse, rmse,mape]
+            global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE','MAPE','DA'])
+        # Ensure DA column
+        desired = ['MAE', 'MSE', 'RMSE', 'MAPE', 'DA']
+        for c in desired:
+            if c not in global_matrix.columns:
+                global_matrix[c] = pd.NA
+        global_matrix = global_matrix.reindex(columns=desired)
+        global_matrix.loc['TimesFM'] = [mae, mse, rmse, mape, da]
         global_matrix.to_csv(csv_path)
         print("Results saved to matrix successfully!")
         print(global_matrix)

@@ -291,15 +291,26 @@ def main():
         rmse = np.sqrt(mse)
         # Calculate MAPE (Mean Absolute Percentage Error)
         mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+        # Directional Accuracy vs previous true close
+        try:
+            y_true_np = np.asarray(y_true, dtype=float)
+            y_pred_np = np.asarray(y_pred, dtype=float)
+            if y_true_np.size > 1 and y_pred_np.size > 1:
+                da = float((np.sign(y_pred_np[1:] - y_true_np[:-1]) == np.sign(y_true_np[1:] - y_true_np[:-1])).mean())
+            else:
+                da = float('nan')
+        except Exception:
+            da = float('nan')
 
         print(f"  MAE:  {mae:.2f}")
         print(f"  MSE:  {mse:.2f}")
         print(f"  RMSE: {rmse:.2f}")
         print(f"  MAPE: {mape:.2f}%")
+        print(f"  DA:   {da:.3f}")
 
         # 9. Create results matrix
-        matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
-        matrix.loc['ARIMA'] = [mae, mse, rmse, mape]
+        matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE', 'DA'])
+        matrix.loc['ARIMA'] = [mae, mse, rmse, mape, da]
         print(f"\n📋 Results Matrix:")
         print(matrix)
         
@@ -316,8 +327,10 @@ def main():
             if results_csv.exists():
                 global_matrix = pd.read_csv(results_csv, index_col=0)
             else:
-                global_matrix = pd.DataFrame(columns=["MAE", "MSE", "RMSE", "MAPE"])
-            global_matrix.loc["ARIMA"] = [mae, mse, rmse, mape]
+                global_matrix = pd.DataFrame(columns=["MAE", "MSE", "RMSE", "MAPE", "DA"])
+            if 'DA' not in global_matrix.columns:
+                global_matrix = global_matrix.reindex(columns=["MAE","MSE","RMSE","MAPE","DA"])
+            global_matrix.loc["ARIMA"] = [mae, mse, rmse, mape, da]
             desired_order = ['ARIMA', 'TimesFM', 'Chronos', 'TFT_baseline', 'TFT_Reddit']
             ordered = [i for i in desired_order if i in global_matrix.index]
             rest = [i for i in global_matrix.index if i not in desired_order]

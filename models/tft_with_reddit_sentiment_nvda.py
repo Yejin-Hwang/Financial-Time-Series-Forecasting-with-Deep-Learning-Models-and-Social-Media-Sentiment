@@ -111,7 +111,7 @@ def get_user_config():
 # 4. Data Loading and Preparation
 # =============================================================================
 
-def load_and_prepare_data(file_path="nvda_combined_range_norm.csv", config=None):
+def load_and_prepare_data(file_path="nvda_price_sentiment_spike_merged_20250203_20250717.csv", config=None):
     """Load and prepare data for TFT model"""
     import pandas as pd
     
@@ -554,19 +554,39 @@ def evaluate_performance(predictions, actuals):
     import torch as _torch
     mape = (_torch.abs((actuals_cpu - predictions_cpu) / actuals_cpu)).mean().mul(100).item()
     
+    # Directional Accuracy (robust)
+    import numpy as _np
+    try:
+        y_true_np = actuals_cpu.detach().cpu().numpy().astype(float).ravel()
+        y_pred_np = predictions_cpu.detach().cpu().numpy()
+        if y_pred_np.ndim > 1:
+            y_pred_np = y_pred_np[0]
+        y_pred_np = _np.asarray(y_pred_np, dtype=float).ravel()
+        min_len = int(min(len(y_true_np), len(y_pred_np)))
+        if min_len >= 2:
+            yt = y_true_np[:min_len]
+            yp = y_pred_np[:min_len]
+            da = float((_np.sign(yp[1:] - yt[:-1]) == _np.sign(yt[1:] - yt[:-1])).mean())
+        else:
+            da = float('nan')
+    except Exception:
+        da = float('nan')
+
     # Create performance metrics DataFrame
     metrics_df = pd.DataFrame({
         'Metric': [
             'MAE',
             'MSE',
             'RMSE',
-            'MAPE'
+            'MAPE',
+            'DA'
         ],
         'Value': [
             f'{mae:.4f}',
             f'{mse:.4f}',
             f'{rmse:.4f}',
-            f'{mape:.4f}'
+            f'{mape:.4f}',
+            f'{da:.4f}'
         ]
     })
     
@@ -578,6 +598,7 @@ def evaluate_performance(predictions, actuals):
         'MSE': mse,
         'RMSE': rmse,
         'MAPE': mape,
+        'DA': da,
     }
 
 # =============================================================================
@@ -835,10 +856,10 @@ def save_results_and_update_matrix(performance_metrics, config):
             matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
 
         # Ensure columns for newer metrics (robust if missing)
-        for col in ['MAE', 'MSE', 'RMSE', 'MAPE']:
+        for col in ['MAE', 'MSE', 'RMSE', 'MAPE', 'DA']:
             if col not in matrix.columns:
                 matrix[col] = pd.NA
-        matrix = matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+        matrix = matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE', 'DA'])
 
         # Normalize legacy row keys
         rename_map = {}
@@ -854,7 +875,8 @@ def save_results_and_update_matrix(performance_metrics, config):
             performance_metrics.get('MAE', None),
             performance_metrics.get('MSE', None),
             performance_metrics.get('RMSE', None),
-            float(performance_metrics.get('MAPE', 0.0))
+            float(performance_metrics.get('MAPE', 0.0)),
+            performance_metrics.get('DA', None)
         ]
 
         # Save updated matrix to pickle
@@ -870,10 +892,10 @@ def save_results_and_update_matrix(performance_metrics, config):
                 global_matrix = pd.DataFrame(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
 
             # Ensure columns present
-            for col in ['MAE', 'MSE', 'RMSE', 'MAPE']:
+            for col in ['MAE', 'MSE', 'RMSE', 'MAPE', 'DA']:
                 if col not in global_matrix.columns:
                     global_matrix[col] = pd.NA
-            global_matrix = global_matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE'])
+            global_matrix = global_matrix.reindex(columns=['MAE', 'MSE', 'RMSE', 'MAPE', 'DA'])
 
             # Same index name normalization
             g_rename_map = {}
@@ -886,7 +908,8 @@ def save_results_and_update_matrix(performance_metrics, config):
                 performance_metrics.get('MAE', None),
                 performance_metrics.get('MSE', None),
                 performance_metrics.get('RMSE', None),
-                float(performance_metrics.get('MAPE', 0.0))
+                float(performance_metrics.get('MAPE', 0.0)),
+                performance_metrics.get('DA', None)
             ]
 
             # Reorder rows if possible (put known models on top)
@@ -957,7 +980,8 @@ def main():
     
     # Load and prepare data
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    data_path = os.path.join(project_root, "data", "processed", "nvda_combined_range_norm.csv")
+
+    data_path = os.path.join(project_root, "data", "processed", "nvda_price_sentiment_spike_merged_20250203_20250717.csv")
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Required file not found: {data_path}")
     df = load_and_prepare_data(data_path, config)
