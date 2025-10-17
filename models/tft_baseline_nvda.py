@@ -100,7 +100,7 @@ def get_user_config():
         'train_start': start_date_str,
         'training_days': training_days,
         'prediction_days': 5,
-        'max_epochs': 20,
+        'max_epochs': 30,
         'batch_size': 128,
         'learning_rate': 0.03,
     }
@@ -693,54 +693,46 @@ def create_standalone_plot(predictions, actuals, config, df=None):
     if df is not None and 'date' in df.columns:
         # Convert dates
         df['date'] = pd.to_datetime(df['date'], errors='coerce', utc=True).dt.tz_localize(None)
-        
-        # Get training period dates - use the actual training data from the model
-        total_points = len(df)
+
         training_points = config['training_days']
-        
-        # Get the actual training data (last N days before prediction)
-        training_dates = df['date'].iloc[-training_points-config['prediction_days']:-config['prediction_days']].tolist()
         training_values = df['close'].iloc[-training_points-config['prediction_days']:-config['prediction_days']].values
-        
-        # Get prediction dates (the last N days that were used for prediction)
-        prediction_dates = df['date'].iloc[-config['prediction_days']:].tolist()
-        
-        # Plot training data
-        plt.plot(training_dates, training_values, 
-                'b-', label='Training Data (Close Price)', linewidth=2, alpha=0.7)
-        
-        # Plot predictions
-        plt.plot(prediction_dates, predictions_cpu[0], 'r--', label='Predictions', 
-                linewidth=3, marker='o', markersize=8)
-        
-        # Plot actuals for prediction period
+        training_dates = df['date'].iloc[-training_points-config['prediction_days']:-config['prediction_days']].tolist()
+        prediction_values = predictions_cpu[0]
         actual_values = df['close'].iloc[-config['prediction_days']:].values
-        plt.plot(prediction_dates, actual_values, 'g-', label='Actual (Close Price)', 
-                linewidth=2, marker='s', markersize=6)
-        
-        # Add vertical line to separate training and prediction
-        last_training_date = training_dates[-1]
-        plt.axvline(x=last_training_date, color='gray', linestyle='--', alpha=0.7, 
-                   label='Training End / Prediction Start')
-        
-        # Format x-axis - show only year and month for cleaner display
-        plt.gca().xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y-%m'))
-        plt.gca().xaxis.set_major_locator(plt.matplotlib.dates.MonthLocator(interval=1))
-        plt.xticks(rotation=45)
-        
+        prediction_dates = df['date'].iloc[-config['prediction_days']:].tolist()
+
+        # Index-based axes
+        x_train = list(range(len(training_values)))
+        plt.plot(x_train, training_values, 'b-', label='Training Data (Close Price)', linewidth=2, alpha=0.7)
+        x_pred = list(range(len(x_train), len(x_train) + len(prediction_values)))
+        plt.plot(x_pred, prediction_values, 'r--', label='Predictions', linewidth=3, marker='o', markersize=8)
+        plt.plot(x_pred, actual_values, 'g-', label='Actual (Close Price)', linewidth=2, marker='s', markersize=6)
+        plt.axvline(x=len(x_train) - 1, color='gray', linestyle='--', alpha=0.7, label='Training End / Prediction Start')
+
+        # Business-day tick labels
+        all_dates = training_dates + prediction_dates
+        max_x = len(x_train) + len(x_pred)
+        tick_idx = list(np.linspace(0, max_x - 1, num=8, dtype=int)) if max_x > 0 else []
+        tick_labels = []
+        for i in tick_idx:
+            if i < len(all_dates):
+                try:
+                    tick_labels.append(pd.to_datetime(all_dates[i]).strftime('%Y-%m-%d'))
+                except Exception:
+                    tick_labels.append(str(all_dates[i]))
+            else:
+                tick_labels.append('')
+        plt.xticks(tick_idx, tick_labels, rotation=45)
+
         # Add grid and labels
         plt.grid(True, alpha=0.3)
         plt.xlabel('Date', fontsize=12)
         plt.ylabel('Stock Price (USD)', fontsize=12)
-        
-        # Add title with training info - use actual training data count
+
+        # Title
         training_cutoff = df["time_idx"].max() - config["prediction_days"]
         actual_training_days = len(df[df['time_idx'] <= training_cutoff])
-        if config.get('training_type') == 'date_range':
-            title = f'TFT Model: Training ({config["start_date"]} to {config["end_date"]}) + {config["prediction_days"]} Days Prediction'
-        else:
-            title = f'TFT Model: {actual_training_days} Days Training + {config["prediction_days"]} Days Prediction'
-        
+        title = f'TFT Model: {actual_training_days} Days Training + {config["prediction_days"]} Days Prediction'
         plt.title(title, fontsize=14, fontweight='bold')
         plt.legend(fontsize=10)
         

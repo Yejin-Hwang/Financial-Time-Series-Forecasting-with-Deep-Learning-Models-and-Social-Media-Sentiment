@@ -681,65 +681,61 @@ def create_standalone_plot(predictions, actuals, config, df=None):
         # Compute safe counts
         n_train = min(training_points, max(0, len(plot_df) - prediction_points))
         n_pred = min(prediction_points, max(0, len(plot_df) - n_train))
+        # Robust fallback in case of edge windows
+        pred_vals = predictions_cpu[0]
+        try:
+            pred_len = int(len(pred_vals))
+        except Exception:
+            pred_len = prediction_points
+        if n_pred <= 0 or pred_len <= 0:
+            n_pred = min(prediction_points, len(plot_df))
+        if n_train <= 0:
+            n_train = max(0, len(plot_df) - n_pred)
 
-        # Build windows
+        # Build windows (index-based axes)
         training_dates = plot_df['date'].iloc[:n_train].tolist()
         training_values = plot_df['close'].iloc[:n_train].values
         prediction_dates = plot_df['date'].iloc[n_train:n_train + n_pred].tolist()
-        
-        # Plot training data
-        plt.plot(training_dates, training_values, 
-                'b-', label='Training Data (Close Price)', linewidth=2, alpha=0.7)
-        
-        # Plot predictions
-        plt.plot(prediction_dates, predictions_cpu[0], 'r--', label='Predictions', 
-                linewidth=3, marker='o', markersize=8)
-        
-        # Plot actuals for prediction period
-        actual_values = plot_df['close'].iloc[n_train:n_train + n_pred].values
-        plt.plot(prediction_dates, actual_values, 'g-', label='Actual (Close Price)', 
-                linewidth=2, marker='s', markersize=6)
-        
-        # Add vertical line to separate training and prediction
-        if len(training_dates) > 0:
-            last_training_date = training_dates[-1]
-            plt.axvline(x=last_training_date, color='gray', linestyle='--', alpha=0.7, 
-                       label='Training End / Prediction Start')
-        
-        # Format x-axis - show only year and month for cleaner display
-        plt.gca().xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y-%m'))
-        plt.gca().xaxis.set_major_locator(plt.matplotlib.dates.MonthLocator(interval=1))
-        plt.xticks(rotation=45)
+
+        x_train = list(range(len(training_values)))
+        plt.plot(x_train, training_values, 'b-', label='Training Data (Close Price)', linewidth=2, alpha=0.7)
+        safe_pred_len = min(n_pred, pred_len)
+        x_pred = list(range(len(x_train), len(x_train) + safe_pred_len))
+        plt.plot(x_pred, pred_vals[:safe_pred_len], 'r--', label='Predictions', linewidth=3, marker='o', markersize=8)
+        actual_values = plot_df['close'].iloc[n_train:n_train + safe_pred_len].values
+        plt.plot(x_pred, actual_values, 'g-', label='Actual (Close Price)', linewidth=2, marker='s', markersize=6)
+        plt.axvline(x=len(x_train) - 1, color='gray', linestyle='--', alpha=0.7, label='Training End / Prediction Start')
+
+        # Business-day tick labels
+        all_dates = training_dates + prediction_dates
+        max_x = len(x_train) + len(x_pred)
+        tick_idx = list(np.linspace(0, max_x - 1, num=8, dtype=int)) if max_x > 0 else []
+        tick_labels = []
+        for i in tick_idx:
+            if i < len(all_dates):
+                try:
+                    tick_labels.append(pd.to_datetime(all_dates[i]).strftime('%Y-%m-%d'))
+                except Exception:
+                    tick_labels.append(str(all_dates[i]))
+            else:
+                tick_labels.append('')
+        plt.xticks(tick_idx, tick_labels, rotation=45)
         
         # Add grid and labels
         plt.grid(True, alpha=0.3)
         plt.xlabel('Date', fontsize=12)
         plt.ylabel('Stock Price (USD)', fontsize=12)
-        
+
         # Add title with training info - use actual training data count
         actual_training_days = len(training_dates)
-        if config.get('training_type') == 'date_range':
-            title = f'TFT Model with Sentiment & Spike: Training ({config["start_date"]} to {config["end_date"]}) + {config["prediction_days"]} Days Prediction'
-        else:
-            title = f'TFT Model with Sentiment & Spike: {actual_training_days} Days Training + {config["prediction_days"]} Days Prediction'
+        title = f'TFT Model with Sentiment & Spike: {actual_training_days} Days Training + {config["prediction_days"]} Days Prediction'
         
         plt.title(title, fontsize=14, fontweight='bold')
         plt.legend(fontsize=10)
-        # Clamp x-axis to the enforced window and ensure the anchor month (e.g., 2025-02) appears
-        if len(training_dates) and len(prediction_dates):
-            try:
-                left_bound = training_dates[0]
-                # Prefer explicit anchor date if provided
-                if config.get('train_start'):
-                    try:
-                        left_bound = pd.to_datetime(config['train_start'])
-                        # Snap to first day of that month so the '%Y-%m' tick (e.g., 2025-02) shows
-                        left_bound = left_bound.replace(day=1)
-                    except Exception:
-                        pass
-                plt.xlim(left_bound, prediction_dates[-1])
-            except Exception:
-                pass
+        # Clamp x-axis numerically to full index range (business-day axis)
+        max_x = len(x_train) + len(x_pred)
+        if max_x > 1:
+            plt.xlim(0, max_x - 1)
         
     else:
         # Fallback without dates

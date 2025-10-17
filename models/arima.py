@@ -149,19 +149,46 @@ def main():
     # Training data
     df_train = df.loc[(df["date"] >= train_start_dt) & (df["date"] <= train_end_dt)].reset_index(drop=True)
     
-    # Calculate test period (next N days after training)
-    test_start_dt = train_end_dt + pd.Timedelta(days=1)
-    test_end_dt = test_start_dt + pd.Timedelta(days=pred_days-1)
-    
-    # Check if we have enough future data for testing
-    if test_end_dt <= max_date:
-        df_test = df.loc[(df["date"] >= test_start_dt) & (df["date"] <= test_end_dt)].reset_index(drop=True)
+    # Calculate test period using business days (next pred_days rows strictly after train_end)
+    future_slice = df.loc[df["date"] > train_end_dt].sort_values("date").head(int(pred_days))
+    if len(future_slice) == int(pred_days):
+        df_test = future_slice.reset_index(drop=True)
         has_test_data = True
         print(f"✓ Testing data: {len(df_test)} samples (for validation)")
     else:
-        has_test_data = False
-        print(f"⚠️  Not enough future data for {pred_days} days testing")
-        print(f"   Will only generate predictions without validation")
+        # Backshift training end to guarantee pred_days test rows when possible
+        try:
+            end_idx_series = df.index[df['date'] == train_end_dt]
+            if len(end_idx_series) > 0:
+                end_idx = int(end_idx_series[0])
+                shortage = int(pred_days) - len(future_slice)
+                new_end_idx = max(0, end_idx - shortage)
+                # Ensure end after start
+                start_idx = int(df.index[df['date'] >= train_start_dt][0]) if len(df.index[df['date'] >= train_start_dt]) > 0 else 0
+                if new_end_idx <= start_idx:
+                    new_end_idx = min(end_idx, start_idx + max(1, len(df) - start_idx - int(pred_days)))
+                new_train_end_dt = pd.to_datetime(df.loc[new_end_idx, 'date'])
+                if new_train_end_dt != train_end_dt:
+                    print(f"⚠️  Shifting training end earlier to {new_train_end_dt.date()} to ensure {pred_days} test rows")
+                    train_end_dt = new_train_end_dt
+                    # Re-slice train and test
+                    df_train = df.loc[(df['date'] >= train_start_dt) & (df['date'] <= train_end_dt)].reset_index(drop=True)
+                    future_slice = df.loc[df['date'] > train_end_dt].sort_values('date').head(int(pred_days))
+            
+            if len(future_slice) == int(pred_days):
+                df_test = future_slice.reset_index(drop=True)
+                has_test_data = True
+                print(f"✓ Testing data: {len(df_test)} samples (for validation)")
+            else:
+                has_test_data = False
+                df_test = pd.DataFrame(columns=df.columns)
+                print(f"⚠️  Not enough future data for {pred_days} business days testing")
+                print(f"   Will only generate predictions without validation")
+        except Exception:
+            has_test_data = False
+            df_test = pd.DataFrame(columns=df.columns)
+            print(f"⚠️  Not enough future data for {pred_days} business days testing")
+            print(f"   Will only generate predictions without validation")
     
     print(f"✓ Training data: {len(df_train)} samples")
     
@@ -265,10 +292,13 @@ def main():
     forecast_pred = fitted.get_forecast(steps=pred_days)
     forecast_pred_mean = forecast_pred.predicted_mean
     
-    # Create future dates for predictions
+    # Create future dates for predictions (align to business days if available)
     from datetime import timedelta
-    last_date = train_end_dt
-    future_dates = [last_date + timedelta(days=i+1) for i in range(pred_days)]
+    if has_test_data and len(df_test) > 0:
+        future_dates = pd.to_datetime(df_test["date"]).tolist()
+    else:
+        last_date = train_end_dt
+        future_dates = [last_date + timedelta(days=i+1) for i in range(pred_days)]
     
     print("✓ Forecast generated successfully!")
     print(f"  Prediction period: {pred_days} days")
@@ -379,52 +409,59 @@ def main():
         plt.style.use('default')
     
     plt.figure(figsize=(16, 8))
-    
-    # Create date range for training data
-    train_dates = df_train['date'].values
-    if has_test_data:
-        test_dates = df_test['date'].values
-    
-    # Plot training data with TFT-style colors
-    plt.plot(df_train['date'], df_train['close'], label='Training Data (Close Price)', 
-             color='blue', linewidth=2, alpha=0.7)
-    
-    # Plot test data if available
-    if has_test_data:
-        plt.plot(df_test['date'], df_test['close'], label='Actual (Close Price)', 
-                 color='green', linewidth=2, marker='s', markersize=6)
-        
-        # Plot forecast for test period
-        plt.plot(df_test['date'], forecast_test_mean, label='Predictions', 
-                 color='red', linewidth=3, linestyle='--', marker='o', markersize=8)
-        
-        # Add confidence intervals for test period if available
+
+    # Index-based plotting to remove calendar gaps
+    train_values = df_train['close'].to_numpy()
+    train_dates_list = pd.to_datetime(df_train['date']).tolist()
+    x_train = list(range(len(train_values)))
+    plt.plot(x_train, train_values, label='Training Data (Close Price)', color='blue', linewidth=2, alpha=0.7)
+
+    tick_dates = train_dates_list.copy()
+    x_pred_line = []
+
+    if has_test_data and len(df_test) > 0:
+        test_values = df_test['close'].to_numpy()
+        x_test = list(range(len(x_train), len(x_train) + len(test_values)))
+        plt.plot(x_test, test_values, label='Actual (Close Price)', color='green', linewidth=2, marker='s', markersize=6)
+
+        # Forecast for test period aligned to test indices
+        plt.plot(x_test, forecast_test_mean.to_numpy(), label='Predictions', color='red', linewidth=3, linestyle='--', marker='o', markersize=8)
         try:
             forecast_ci = fitted.get_forecast(steps=len(df_test)).conf_int()
-            plt.fill_between(df_test['date'], 
-                             forecast_ci.iloc[:, 0], 
-                             forecast_ci.iloc[:, 1], 
-                             alpha=0.2, color='red', label='95% Confidence Interval')
-        except:
+            plt.fill_between(x_test, forecast_ci.iloc[:, 0].to_numpy(), forecast_ci.iloc[:, 1].to_numpy(), alpha=0.2, color='red', label='95% Confidence Interval')
+        except Exception:
             pass
-    
-    # Plot main predictions
-    plt.plot(future_dates, forecast_pred_mean, label=f'ARIMA Predictions ({pred_days} days)', 
-             color='red', linewidth=3, linestyle='--', marker='o', markersize=8)
-    
-    # Add vertical line to separate training and prediction
-    plt.axvline(x=train_end_dt, color='gray', linestyle='--', alpha=0.7, 
-               label='Training End / Prediction Start')
-    
-    # Format x-axis to show dates nicely
-    plt.gca().xaxis.set_major_locator(plt.matplotlib.dates.WeekdayLocator(interval=1))
-    plt.gca().xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y-%m-%d'))
-    plt.gcf().autofmt_xdate()  # Rotate and align the tick labels
-    
-    # Add title with training info - use actual training data count
+        tick_dates += pd.to_datetime(df_test['date']).tolist()
+        x_pred_line = x_test
+    else:
+        x_future = list(range(len(x_train), len(x_train) + len(forecast_pred_mean)))
+        plt.plot(x_future, forecast_pred_mean.to_numpy(), label=f'ARIMA Predictions ({pred_days} days)', color='red', linewidth=3, linestyle='--', marker='o', markersize=8)
+        x_pred_line = x_future
+        tick_dates += future_dates
+
+    # Vertical separator at the end of training
+    if len(x_train) > 0:
+        plt.axvline(x=len(x_train) - 1, color='gray', linestyle='--', alpha=0.7, label='Training End / Prediction Start')
+
+    # Date tick labels
+    max_x = len(x_train) + (len(x_pred_line) if x_pred_line is not None else 0)
+    if max_x > 0:
+        tick_idx = list(np.linspace(0, max_x - 1, num=8, dtype=int))
+        tick_labels = []
+        for i in tick_idx:
+            if i < len(tick_dates):
+                try:
+                    tick_labels.append(pd.to_datetime(tick_dates[i]).strftime('%Y-%m-%d'))
+                except Exception:
+                    tick_labels.append(str(tick_dates[i]))
+            else:
+                tick_labels.append('')
+        plt.xticks(tick_idx, tick_labels, rotation=45)
+
+    # Title and styling
     actual_training_days = len(df_train)
     title = f'ARIMA Model: {actual_training_days} Days Training + {pred_days} Days Prediction'
-    
+
     plt.xlabel('Date', fontsize=12)
     plt.ylabel('Stock Price (USD)', fontsize=12)
     plt.title(title, fontsize=14, fontweight='bold')

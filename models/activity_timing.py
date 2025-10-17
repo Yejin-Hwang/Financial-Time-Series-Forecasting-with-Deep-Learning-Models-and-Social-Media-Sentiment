@@ -192,13 +192,18 @@ def plot_results(
         ax1.plot(x_dates, loess_upper, label='LOWESS 95% upper', linestyle='--', color='orange')
         ax1.axhline(mean_plus_3std, color='red', linestyle=':', label='Mean + 3*Std')
         ax1.tick_params(axis='y', labelcolor=color_left)
-        ax1.legend(loc='upper left')
+        # Collect legends from both axes, including closing price on right axis
+        handles1, labels1 = ax1.get_legend_handles_labels()
 
         ax2 = ax1.twinx()
         color_right = 'tab:gray'
         ax2.set_ylabel('Stock Close Price', color=color_right)
-        ax2.plot(x_dates, close_price, label='Close', color=color_right, linewidth=1.5, linestyle='--')
+        ax2.plot(x_dates, close_price, label='Closing Price', color=color_right, linewidth=1.5, linestyle='--')
         ax2.tick_params(axis='y', labelcolor=color_right)
+
+        # Merge legends so the gray line appears as 'Closing Price'
+        handles2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(handles1 + handles2, labels1 + labels2, loc='upper left')
 
         plt.title('Spike Detection & Stock Price')
         fig.tight_layout()

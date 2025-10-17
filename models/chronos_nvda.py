@@ -93,30 +93,52 @@ def _plot(df_train: pd.DataFrame, df_test: pd.DataFrame, median: np.ndarray, low
         plt.style.use('default')
     
     plt.figure(figsize=(16, 8))
-    # Plot training data with TFT-style colors
-    plt.plot(df_train['date'], df_train['close'], color='blue', linewidth=2, alpha=0.7, label='Training Data (Close Price)')
+    # Index-based x axis
+    train_values = df_train['close'].to_numpy()
+    train_dates = pd.to_datetime(df_train['date']).tolist()
+    x_train = list(range(len(train_values)))
+    plt.plot(x_train, train_values, color='blue', linewidth=2, alpha=0.7, label='Training Data (Close Price)')
+    tick_dates = train_dates.copy()
     if not df_test.empty:
-        plt.plot(df_test['date'], df_test['close'], color='green', linewidth=2, marker='s', markersize=6, label='Actual (Close Price)')
-    if median is not None:
-        plt.plot(df_test['date'], median, color='red', linewidth=3, linestyle='--', marker='o', markersize=8, label='Predictions')
-    if low is not None and high is not None:
-        plt.fill_between(df_test['date'], low, high, color='red', alpha=0.2, label='30-80% Prediction Interval')
-    
-    # Add vertical line to separate training and prediction
+        test_dates = pd.to_datetime(df_test['date']).tolist()
+        tick_dates += test_dates
+        plt.axvline(x=len(x_train) - 1, color='gray', linestyle='--', alpha=0.7, label='Training End / Prediction Start')
+    if median is not None and not df_test.empty:
+        x_pred = list(range(len(x_train), len(x_train) + len(median)))
+        plt.plot(x_pred, median, color='red', linewidth=3, linestyle='--', marker='o', markersize=8, label='Predictions')
+    if low is not None and high is not None and not df_test.empty:
+        xq = list(range(len(x_train), len(x_train) + len(low)))
+        plt.fill_between(xq, low, high, color='red', alpha=0.2, label='30-80% Prediction Interval')
+
     if not df_test.empty:
-        plt.axvline(x=df_test['date'].iloc[0], color='gray', linestyle='--', alpha=0.7, 
-                   label='Training End / Prediction Start')
-    # Add title with training info - use actual training data count
+        y_true = df_test['close'].to_numpy()
+        x_true = list(range(len(x_train), len(x_train) + len(y_true)))
+        plt.plot(x_true, y_true, color='green', linewidth=2, marker='s', markersize=6, label='Actual (Close Price)')
+
+    # Title and ticks
     actual_training_days = len(df_train)
     pred_days = len(df_test) if not df_test.empty else 5
     title = f'Chronos Model: {actual_training_days} Days Training + {pred_days} Days Prediction'
-    
+
     plt.title(title, fontsize=14, fontweight='bold')
     plt.xlabel('Date', fontsize=12)
     plt.ylabel('Stock Price (USD)', fontsize=12)
+
+    max_x = len(x_train) + (len(df_test) if not df_test.empty else 0)
+    tick_idx = list(np.linspace(0, max_x - 1, num=8, dtype=int)) if max_x > 0 else []
+    tick_labels = []
+    for i in tick_idx:
+        if i < len(tick_dates):
+            try:
+                tick_labels.append(pd.to_datetime(tick_dates[i]).strftime('%Y-%m-%d'))
+            except Exception:
+                tick_labels.append(str(tick_dates[i]))
+        else:
+            tick_labels.append('')
+    plt.xticks(tick_idx, tick_labels, rotation=45)
+
     plt.legend(loc='upper left', fontsize=10)
     plt.grid(True, alpha=0.3)
-    plt.xticks(rotation=45)
     plt.tight_layout()
 
     # Save to results/

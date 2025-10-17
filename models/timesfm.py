@@ -229,44 +229,73 @@ def _plot_results(df_train: pd.DataFrame, df_test: pd.DataFrame, forecast_df: pd
         plt.style.use('seaborn-v0_8')
     except:
         plt.style.use('default')
-    
+
     plt.figure(figsize=(16, 8))
 
-    # Plot training data with TFT-style colors
-    plt.plot(df_train["date"], df_train["close"], label="Training Data (Close Price)", color="blue", linewidth=2, alpha=0.7)
+    # Build index-based x axes
+    train_values = df_train["close"].to_numpy()
+    train_dates = pd.to_datetime(df_train["date"]).tolist()
+    x_train = list(range(len(train_values)))
 
-    # Median prediction (align x-axis to df_test dates to avoid weekend/offset mismatch)
-    if "timesfm" in forecast_df.columns:
+    # Plot training
+    plt.plot(x_train, train_values, label="Training Data (Close Price)", color="blue", linewidth=2, alpha=0.7)
+
+    # Predictions aligned to test length
+    tick_dates = train_dates.copy()
+    if not df_test.empty:
+        test_dates = pd.to_datetime(df_test["date"]).tolist()
+        tick_dates += test_dates
+        x_split = len(x_train) - 1
+        plt.axvline(x=x_split, color="gray", linestyle="--", alpha=0.7, label="Training End / Prediction Start")
+
+    if "timesfm" in forecast_df.columns and not df_test.empty:
         y_pred = forecast_df["timesfm"].to_numpy()
         k = min(len(y_pred), len(df_test))
-        x_pred = pd.to_datetime(df_test["date"].iloc[:k])
+        x_pred = list(range(len(x_train), len(x_train) + k))
         plt.plot(x_pred, y_pred[:k], label="Predictions", color="red", linewidth=3, linestyle="--", marker="o", markersize=8)
 
     # Prediction interval (10-90%)
-    if 'timesfm-q-0.1' in forecast_df.columns and 'timesfm-q-0.9' in forecast_df.columns:
+    if ('timesfm-q-0.1' in forecast_df.columns and 'timesfm-q-0.9' in forecast_df.columns and not df_test.empty):
         ql = forecast_df['timesfm-q-0.1'].to_numpy()
         qh = forecast_df['timesfm-q-0.9'].to_numpy()
         kq = min(len(ql), len(df_test))
-        xq = pd.to_datetime(df_test["date"].iloc[:kq])
+        xq = list(range(len(x_train), len(x_train) + kq))
         plt.fill_between(xq, ql[:kq], qh[:kq], color="red", alpha=0.2, label="10-90% Prediction Interval")
 
     # Actual test data
     if not df_test.empty:
-        plt.plot(df_test["date"], df_test["close"], label="Actual (Close Price)", color="green", linewidth=2, marker="s", markersize=6)
-    
-    # Add vertical line to separate training and prediction
-    if not df_test.empty:
-        plt.axvline(x=df_test["date"].iloc[0], color="gray", linestyle="--", alpha=0.7, 
-                   label="Training End / Prediction Start")
+        y_true = df_test["close"].to_numpy()
+        x_true = list(range(len(x_train), len(x_train) + len(y_true)))
+        plt.plot(x_true, y_true, label="Actual (Close Price)", color="green", linewidth=2, marker="s", markersize=6)
 
-    # Add title with training info - use actual training data count
+    # Title and labels
     actual_training_days = len(df_train)
     pred_days = len(forecast_df) if not forecast_df.empty else 5
     title = f'TimesFM Model: {actual_training_days} Days Training + {pred_days} Days Prediction'
-    
+
     plt.xlabel("Date", fontsize=12)
     plt.ylabel("Stock Price (USD)", fontsize=12)
     plt.title(title, fontsize=14, fontweight='bold')
+
+    # Business-day tick labels from combined dates
+    all_dates = tick_dates
+    if len(all_dates) == 0:
+        all_dates = train_dates
+    max_x = len(x_train)
+    if not df_test.empty:
+        max_x = len(x_train) + len(df_test)
+    tick_idx = list(np.linspace(0, max_x - 1, num=8, dtype=int)) if max_x > 0 else []
+    tick_labels = []
+    for i in tick_idx:
+        if i < len(all_dates):
+            try:
+                tick_labels.append(pd.to_datetime(all_dates[i]).strftime('%Y-%m-%d'))
+            except Exception:
+                tick_labels.append(str(all_dates[i]))
+        else:
+            tick_labels.append("")
+    plt.xticks(tick_idx, tick_labels, rotation=45)
+
     plt.legend(fontsize=10)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
