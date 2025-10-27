@@ -104,6 +104,160 @@ The project includes processed datasets for **TSLA** and **NVDA**. You can run t
 
 ![TFT Improvement Visualization](results/tft_improvement.png)
 
+## 📊 Results Visualizations
+
+### Model Forecasts (TSLA)
+
+<table>
+<tr>
+<td align="center" width="50%">
+<img src="results/TSLA_ARIMA_forecast.png" width="375">
+<br><b>ARIMA</b><br>RMSE: 18.54
+</td>
+<td align="center" width="50%">
+<img src="results/TSLA_TimesFM_forecast.png" width="375">
+<br><b>TimesFM</b><br>RMSE: 19.80
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<img src="results/TSLA_Chronos_forecast.png" width="375">
+<br><b>Chronos</b><br>RMSE: 8.41
+</td>
+<td align="center" width="50%">
+<img src="results/TSLA_TFT_baseline_forecast.png" width="375">
+<br><b>TFT Baseline</b><br>RMSE: 5.45
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<img src="results/TSLA_TFT_with_reddit_sentiment_forecast.png" width="375">
+<br><b>TFT with Reddit Sentiment</b><br>RMSE: 3.26 ⭐
+</td>
+<td align="center" width="50%">
+</td>
+</tr>
+</table>
+
+### Model Forecasts (NVDA)
+
+<table>
+<tr>
+<td align="center" width="50%">
+<img src="results/NVDA_ARIMA_forecast.png" width="375">
+<br><b>ARIMA</b><br>RMSE: 6.61
+</td>
+<td align="center" width="50%">
+<img src="results/NVDA_TimesFM_forecast.png" width="375">
+<br><b>TimesFM</b><br>RMSE: 8.26
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<img src="results/NVDA_Chronos_forecast.png" width="375">
+<br><b>Chronos</b><br>RMSE: 8.41
+</td>
+<td align="center" width="50%">
+<img src="results/NVDA_TFT_baseline_forecast.png" width="375">
+<br><b>TFT Baseline</b><br>RMSE: 14.37
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<img src="results/NVDA_TFT_with_reddit_sentiment_forecast.png" width="375">
+<br><b>TFT with Reddit Sentiment</b><br>RMSE: 1.74 ⭐
+</td>
+<td align="center" width="50%">
+</td>
+</tr>
+</table>
+
+### TFT Model Interpretability
+
+The Temporal Fusion Transformer (TFT) model provides rich interpretability through attention mechanisms and variable importance analysis. These visualizations help understand how the model makes predictions and which features contribute most to the forecasting performance.
+
+#### TSLA Baseline TFT (Price Features Only)
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="results/TSLA_TFT_baseline_Attention.png" width="250">
+<br><b>Attention Patterns</b>
+</td>
+<td align="center" width="33%">
+<img src="results/TSLA_TFT_baseline_Encoder.png" width="250">
+<br><b>Encoder Visualization</b>
+</td>
+<td align="center" width="33%">
+<img src="results/TSLA_TFT_baseline_variable_importance.png" width="250">
+<br><b>Variable Importance</b>
+</td>
+</tr>
+</table>
+
+#### TSLA TFT with Reddit Sentiment
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="results/TSLA_TFT_with_reddit_sentiment_Attention.png" width="250">
+<br><b>Attention Patterns</b>
+</td>
+<td align="center" width="33%">
+<img src="results/TSLA_TFT_with_reddit_sentiment_Encoder.png" width="250">
+<br><b>Encoder Visualization</b>
+</td>
+<td align="center" width="33%">
+<img src="results/TSLA_TFT_with_reddit_sentiment_variable_importance.png" width="250">
+<br><b>Variable Importance</b>
+</td>
+</tr>
+</table>
+
+#### NVDA Baseline TFT (Price Features Only)
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="results/NVDA_TFT_baseline_Attention.png" width="250">
+<br><b>Attention Patterns</b>
+</td>
+<td align="center" width="33%">
+<img src="results/NVDA_TFT_baseline_Encoder.png" width="250">
+<br><b>Encoder Visualization</b>
+</td>
+<td align="center" width="33%">
+<img src="results/NVDA_TFT_baseline_variable_importance.png" width="250">
+<br><b>Variable Importance</b>
+</td>
+</tr>
+</table>
+
+#### NVDA TFT with Reddit Sentiment
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="results/NVDA_TFT_with_reddit_sentiment_Attention.png" width="250">
+<br><b>Attention Patterns</b>
+</td>
+<td align="center" width="33%">
+<img src="results/NVDA_TFT_with_reddit_sentiment_Encoder.png" width="250">
+<br><b>Encoder Visualization</b>
+</td>
+<td align="center" width="33%">
+<img src="results/NVDA_TFT_with_sentiment_variable_importance.png" width="250">
+<br><b>Variable Importance</b>
+</td>
+</tr>
+</table>
+
+### Reddit Activity Analysis
+
+#### TSLA Activity Analysis
+![TSLA Activity Timing Spike Detection](results/TSLA_activity_timing_spike_price.png)
+*Reddit activity spike detection mapped to TSLA price movements*
+
+#### NVDA Activity Analysis
+![NVDA Activity Timing Spike Detection](results/NVDA_activity_timing_spike_price.png)
+*Reddit activity spike detection mapped to NVDA price movements*
+
 ## 🔧 Data Extraction (Optional)
 
 If you want to refresh or expand the datasets, you can run the data extraction pipelines:
